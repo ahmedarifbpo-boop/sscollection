@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-const supabaseUrl = process.env.SUPABASE_URL || "";
-const supabaseKey = process.env.SUPABASE_SERVICE || "";
-const supabase = createClient(supabaseUrl, supabaseKey);
+import { writeFile, mkdir } from "fs/promises";
+import { join } from "path";
 
 export async function POST(request: Request) {
   try {
@@ -17,26 +14,17 @@ export async function POST(request: Request) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    // File ka unique naam banao
+    const uploadDir = join(process.cwd(), "public", "uploads");
+    await mkdir(uploadDir, { recursive: true });
+
     const ext = file.name.split(".").pop() || "jpg";
     const filename = `${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+    const path = join(uploadDir, filename);
 
-    // Supabase Storage mein upload karo
-    const { data, error } = await supabase.storage
-      .from("uploads")
-      .upload(filename, buffer, {
-        contentType: file.type,
-        upsert: false,
-      });
+    await writeFile(path, buffer);
 
-    if (error) throw error;
-
-    // Public URL nikaalo
-    const { data: publicUrlData } = supabase.storage
-      .from("uploads")
-      .getPublicUrl(filename);
-
-    return NextResponse.json({ url: publicUrlData.publicUrl });
+    const fileUrl = `/uploads/${filename}`;
+    return NextResponse.json({ url: fileUrl });
   } catch (error) {
     console.error("Upload error:", error);
     return NextResponse.json({ error: "Failed to upload image" }, { status: 500 });
