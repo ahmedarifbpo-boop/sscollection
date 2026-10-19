@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
-  ShoppingCart, ArrowLeft, Minus, Plus, Trash2, User, Phone, MapPin, CheckCircle2, X
+  ShoppingCart, ArrowLeft, Minus, Plus, Trash2, CheckCircle2, X
 } from "lucide-react";
 import { useCart } from "@/lib/cart";
 
@@ -18,14 +18,29 @@ export default function CartPage() {
   const [orderSnapshot, setOrderSnapshot] = useState<any>(null);
   const [placing, setPlacing] = useState(false);
   const [error, setError] = useState("");
+  
+  const [settings, setSettings] = useState({ shippingFee: 250, freeShippingThreshold: 5000, enableFreeShipping: true });
 
-  const shipping = totalPrice > 5000 ? 0 : 250;
+  useEffect(() => {
+    fetch("/api/settings", { cache: "no-store" })
+      .then(r => r.json())
+      .then(d => {
+        if (d.settings) {
+          setSettings({
+            shippingFee: d.settings.shippingFee || 250,
+            freeShippingThreshold: d.settings.freeShippingThreshold || 5000,
+            enableFreeShipping: d.settings.enableFreeShipping ?? true
+          });
+        }
+      });
+  }, []);
+
+  const shipping = (settings.enableFreeShipping && totalPrice >= settings.freeShippingThreshold) ? 0 : settings.shippingFee;
   const grandTotal = totalPrice + shipping;
 
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (items.length === 0) return;
-
     setPlacing(true);
     setError("");
 
@@ -99,10 +114,8 @@ export default function CartPage() {
             <Link href="/" className="dz-btn-primary" style={{ display: "inline-block", textDecoration: "none" }}>Start Shopping</Link>
           </div>
         ) : (
-          /* YAHAN MAIN GRID FIX KIYA HAI */
           <div style={{ display: "flex", flexDirection: "column", gap: "20px" }} className="cart-responsive-grid">
             
-            {/* LEFT COLUMN - ITEMS */}
             <div style={{ display: "flex", flexDirection: "column", gap: "12px", flex: 1 }}>
               {items.map((item) => {
                 const price = item.salePrice || item.price;
@@ -110,7 +123,6 @@ export default function CartPage() {
                 return (
                   <div key={item.id} className="dz-card" style={{ padding: "12px", display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
                     <img src={item.image} alt={item.name} style={{ width: "64px", height: "64px", objectFit: "cover", borderRadius: "3px" }} />
-                    
                     <div style={{ flex: 1, minWidth: "140px" }}>
                       <h3 className="line-clamp-2" style={{ fontSize: "13px", color: "var(--text-primary)", marginBottom: "4px" }}>{item.name}</h3>
                       <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
@@ -118,98 +130,77 @@ export default function CartPage() {
                         {item.salePrice && <span style={{ fontSize: "11px", color: "var(--text-muted)", textDecoration: "line-through" }}>Rs. {item.price.toLocaleString()}</span>}
                       </div>
                     </div>
-
                     <div style={{ display: "flex", alignItems: "center", border: "1px solid var(--border-strong)", borderRadius: "3px", background: "var(--surface)" }}>
                       <button onClick={() => updateQuantity(item.id, item.quantity - 1)} style={{ padding: "6px 8px", color: "var(--text-secondary)", background: "transparent", border: "none" }}><Minus size={14} /></button>
                       <span style={{ fontSize: "14px", minWidth: "24px", textAlign: "center" }}>{item.quantity}</span>
                       <button onClick={() => updateQuantity(item.id, item.quantity + 1)} style={{ padding: "6px 8px", color: "var(--text-secondary)", background: "transparent", border: "none" }}><Plus size={14} /></button>
                     </div>
-
                     <div style={{ fontSize: "14px", fontWeight: "700", minWidth: "80px", textAlign: "right" }}>Rs. {lineTotal.toLocaleString()}</div>
-                    
                     <button onClick={() => removeFromCart(item.id)} style={{ background: "transparent", border: "none", color: "#EF4444", cursor: "pointer" }}><Trash2 size={16} /></button>
                   </div>
                 );
               })}
             </div>
 
-            {/* RIGHT COLUMN - SUMMARY & FORM */}
             <div style={{ display: "flex", flexDirection: "column", gap: "16px", flex: 1 }}>
               
-              {/* Summary Card */}
               <div className="dz-card" style={{ padding: "20px" }}>
                 <h2 style={{ fontSize: "16px", fontWeight: "500", marginBottom: "16px" }}>Order Summary</h2>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: "8px" }}>
                   <span>Subtotal</span><span>Rs. {totalPrice.toLocaleString()}</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: "8px" }}>
-                  <span>Shipping</span><span>{shipping === 0 ? <span style={{ color: "#10B981" }}>FREE</span> : `Rs. ${shipping}`}</span>
+                  <span>Shipping</span>
+                  <span>{shipping === 0 ? <span style={{ color: "#10B981" }}>FREE</span> : `Rs. ${shipping}`}</span>
                 </div>
+                {settings.enableFreeShipping && shipping > 0 && (
+                   <p style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "12px" }}>
+                     Add Rs. {(settings.freeShippingThreshold - totalPrice).toLocaleString()} more for free shipping
+                   </p>
+                )}
                 <div style={{ borderTop: "1px solid var(--border)", paddingTop: "12px", marginTop: "12px", display: "flex", justifyContent: "space-between", fontSize: "16px", fontWeight: "700" }}>
                   <span>Total</span><span style={{ color: "var(--accent)" }}>Rs. {grandTotal.toLocaleString()}</span>
                 </div>
               </div>
 
-              {/* Form Card */}
               <form onSubmit={handlePlaceOrder} className="dz-card" style={{ padding: "20px" }}>
                 <h2 style={{ fontSize: "16px", fontWeight: "500", marginBottom: "16px" }}>Delivery Details</h2>
-                
                 <label style={{ display: "block", fontSize: "12px", marginBottom: "6px" }}>Full Name</label>
                 <input type="text" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ali Khan" className="dz-input" style={{ marginBottom: "12px" }} />
-
                 <label style={{ display: "block", fontSize: "12px", marginBottom: "6px" }}>Phone Number</label>
                 <input type="tel" required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+92 300 1234567" className="dz-input" style={{ marginBottom: "12px" }} />
-
                 <label style={{ display: "block", fontSize: "12px", marginBottom: "6px" }}>Delivery Address</label>
-                <textarea required rows={3} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="House #, Street, Area" className="dz-input" style={{ resize: "none", marginBottom: "16px" }} />
-
+                <textarea required rows={3} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="House #, Street" className="dz-input" style={{ resize: "none", marginBottom: "16px" }} />
                 <div style={{ background: "var(--bg-alt)", padding: "12px", borderRadius: "3px", marginBottom: "16px" }}>
-                  <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "2px" }}>PAYMENT METHOD</div>
+                  <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>PAYMENT METHOD</div>
                   <div style={{ fontSize: "14px", fontWeight: "500" }}>Cash on Delivery</div>
                 </div>
-
                 {error && <div style={{ background: "#FEE", color: "#EF4444", padding: "10px", borderRadius: "3px", fontSize: "12px", marginBottom: "12px" }}>{error}</div>}
-
                 <button type="submit" disabled={placing} className="dz-btn-primary" style={{ width: "100%", padding: "12px" }}>
                   {placing ? "Placing..." : `Place Order — Rs. ${grandTotal.toLocaleString()}`}
                 </button>
               </form>
-
             </div>
           </div>
         )}
       </div>
 
-      {/* SUCCESS POPUP (Same as before) */}
       {showSuccess && orderSnapshot && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px", background: "rgba(0,0,0,0.5)" }} className="fade-in">
-          <div className="modal-in" style={{ background: "#fff", borderRadius: "6px", width: "100%", maxWidth: "500px", maxHeight: "90vh", overflowY: "auto", padding: "24px", position: "relative" }}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px", background: "rgba(0,0,0,0.5)" }}>
+          <div style={{ background: "#fff", borderRadius: "6px", width: "100%", maxWidth: "500px", maxHeight: "90vh", overflowY: "auto", padding: "24px", position: "relative" }}>
             <button onClick={handleCloseSuccess} style={{ position: "absolute", top: "12px", right: "12px", background: "transparent", border: "none" }}><X size={18} /></button>
-            
             <div style={{ textAlign: "center", marginBottom: "20px" }}>
               <CheckCircle2 size={48} style={{ color: "#10B981", marginBottom: "12px" }} />
               <h2 style={{ fontSize: "20px", fontWeight: "700" }}>Order Placed!</h2>
-              <p style={{ fontSize: "13px", color: "#666" }}>Order ID: <strong style={{ color: "var(--accent)" }}>{orderId}</strong></p>
+              <p style={{ fontSize: "13px", color: "#666" }}>Order ID: <strong>{orderId}</strong></p>
             </div>
-
-            <div style={{ background: "#FAFAFA", padding: "16px", borderRadius: "3px", marginBottom: "20px" }}>
-              <div style={{ fontSize: "13px", fontWeight: "600", marginBottom: "4px" }}>{orderSnapshot.form.name}</div>
-              <div style={{ fontSize: "12px", color: "#666" }}>{orderSnapshot.form.phone}</div>
-              <div style={{ fontSize: "12px", color: "#666" }}>{orderSnapshot.form.address}</div>
-            </div>
-
             <button onClick={handleCloseSuccess} className="dz-btn-primary" style={{ width: "100%", padding: "12px" }}>Continue Shopping</button>
           </div>
         </div>
       )}
 
-      {/* 🔥 YEH CSS MOBILE KO AUTO ADJUST KAREGI */}
       <style jsx>{`
-        .cart-responsive-grid {
-          display: flex;
-          flex-direction: column;
-        }
-        
+        .cart-responsive-grid { display: flex; flex-direction: column; }
         @media (min-width: 900px) {
           .cart-responsive-grid {
             display: grid !important;

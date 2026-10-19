@@ -25,18 +25,20 @@ function ProductContent() {
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
 
-  // Shipping Settings State
   const [shippingFee, setShippingFee] = useState(250);
   const [freeThreshold, setFreeThreshold] = useState(5000);
+  const [enableFreeShipping, setEnableFreeShipping] = useState(true);
 
   useEffect(() => {
-    // Settings fetch karo
-    fetch("/api/settings").then(r => r.json()).then(d => {
-      if (d.settings) {
-        setShippingFee(d.settings.shippingFee || 250);
-        setFreeThreshold(d.settings.freeShippingThreshold || 5000);
-      }
-    });
+    fetch("/api/settings", { cache: "no-store" })
+      .then(r => r.json())
+      .then(d => {
+        if (d.settings) {
+          setShippingFee(d.settings.shippingFee || 250);
+          setFreeThreshold(d.settings.freeShippingThreshold || 5000);
+          setEnableFreeShipping(d.settings.enableFreeShipping ?? true);
+        }
+      });
 
     async function fetchProduct() {
       try {
@@ -170,10 +172,9 @@ function ProductContent() {
               </div>
             </div>
 
-            {/* YAHAN SHIPPING INFO ADD KI HAI */}
             <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "16px", textAlign: "center", background: "var(--bg-alt)", padding: "10px", borderRadius: "3px" }}>
               🚚 Shipping: <strong>{shippingFee === 0 ? "Free" : `Rs. ${shippingFee}`}</strong> 
-              {freeThreshold > 0 && ` (Free delivery on orders above Rs. ${freeThreshold.toLocaleString()})`}
+              {enableFreeShipping && freeThreshold > 0 && ` (Free delivery on orders above Rs. ${freeThreshold.toLocaleString()})`}
             </div>
 
           </div>

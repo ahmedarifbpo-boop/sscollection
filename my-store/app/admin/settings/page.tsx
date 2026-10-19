@@ -12,13 +12,16 @@ export default function AdminSettingsPage() {
   const [savedMsg, setSavedMsg] = useState("");
   const [storageSize, setStorageSize] = useState("Loading...");
 
-  // Form state
   const [form, setForm] = useState({
-    storeName: "", contactEmail: "", contactPhone: "", address: "",
-    freeShippingThreshold: "", shippingFee: "",
+    storeName: "", 
+    contactEmail: "", 
+    contactPhone: "", 
+    address: "",
+    freeShippingThreshold: "", 
+    shippingFee: "",
+    enableFreeShipping: true,
   });
 
-  // Data lists for delete section
   const [chats, setChats] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [offers, setOffers] = useState<any[]>([]);
@@ -30,7 +33,7 @@ export default function AdminSettingsPage() {
     async function fetchData() {
       try {
         const [setRes, storeRes, chatRes, prodRes, offerRes] = await Promise.all([
-          fetch("/api/settings"),
+          fetch("/api/settings", { cache: "no-store" }),
           fetch("/api/storage"),
           fetch("/api/admin-chat"),
           fetch("/api/products"),
@@ -51,6 +54,7 @@ export default function AdminSettingsPage() {
             address: setData.settings.address || "",
             freeShippingThreshold: setData.settings.freeShippingThreshold.toString() || "5000",
             shippingFee: setData.settings.shippingFee.toString() || "250",
+            enableFreeShipping: setData.settings.enableFreeShipping ?? true,
           });
         }
 
@@ -68,7 +72,6 @@ export default function AdminSettingsPage() {
     fetchData();
   }, [router]);
 
-  // Save basic settings
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true); setSavedMsg("");
@@ -88,7 +91,6 @@ export default function AdminSettingsPage() {
     } catch (e) { alert("Failed to save"); } finally { setSaving(false); }
   };
 
-  // Delete functions
   const deleteChat = async (id: string, name: string) => {
     if (!confirm(`Delete chat with ${name}?`)) return;
     await fetch(`/api/admin-chat/${id}`, { method: "DELETE" });
@@ -117,7 +119,6 @@ export default function AdminSettingsPage() {
         <p style={{ fontSize: "13px", color: "var(--text-muted)" }}>Manage store info and database data.</p>
       </div>
 
-      {/* STORAGE STATUS CARD */}
       <div className="dz-card" style={{ padding: "20px", marginBottom: "24px", display: "flex", alignItems: "center", gap: "16px", borderLeft: "4px solid var(--accent)" }}>
         <div style={{ background: "var(--accent)15", padding: "12px", borderRadius: "50%", color: "var(--accent)" }}>
           <Database size={24} />
@@ -128,7 +129,6 @@ export default function AdminSettingsPage() {
         </div>
       </div>
 
-      {/* BASIC SETTINGS FORM */}
       <form onSubmit={handleSaveSettings} className="dz-card" style={{ padding: "24px", marginBottom: "24px" }}>
         <h2 style={{ fontSize: "16px", fontWeight: "600", marginBottom: "16px" }}>Store Information</h2>
         {savedMsg && <div style={{ background: "#E8F8EE", color: "#10B981", padding: "12px", borderRadius: "3px", marginBottom: "16px", fontSize: "13px", fontWeight: "500" }}>✓ {savedMsg}</div>}
@@ -150,15 +150,41 @@ export default function AdminSettingsPage() {
             <label style={{ display: "block", fontSize: "12px", color: "var(--text-secondary)", marginBottom: "6px" }}>Address</label>
             <input type="text" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="dz-input" />
           </div>
-          <div>
-            <label style={{ display: "block", fontSize: "12px", color: "var(--text-secondary)", marginBottom: "6px" }}>Free Shipping Above (Rs.)</label>
-            <input type="number" value={form.freeShippingThreshold} onChange={(e) => setForm({ ...form, freeShippingThreshold: e.target.value })} className="dz-input" />
+        </div>
+
+        {/* SHIPPING SETTINGS */}
+        <div style={{ borderTop: "1px solid var(--border)", paddingTop: "16px", marginTop: "16px" }}>
+          <h3 style={{ fontSize: "14px", fontWeight: "600", marginBottom: "12px" }}>Shipping Settings</h3>
+          
+          <div style={{ marginBottom: "16px", padding: "12px", background: "var(--bg-alt)", borderRadius: "3px" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }}>
+              <input 
+                type="checkbox" 
+                checked={form.enableFreeShipping} 
+                onChange={(e) => setForm({ ...form, enableFreeShipping: e.target.checked })} 
+                style={{ width: "18px", height: "18px", accentColor: "var(--accent)" }}
+              />
+              <span style={{ fontSize: "14px", fontWeight: "500", color: "var(--text-primary)" }}>
+                Enable Free Shipping Feature
+              </span>
+            </label>
+            <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "4px", marginLeft: "28px" }}>
+              Agar ye ON hai, to limit ke upar order par shipping free hogi. Agar OFF hai, to har order par shipping charge lagega.
+            </p>
           </div>
-          <div>
-            <label style={{ display: "block", fontSize: "12px", color: "var(--text-secondary)", marginBottom: "6px" }}>Shipping Fee (Rs.)</label>
-            <input type="number" value={form.shippingFee} onChange={(e) => setForm({ ...form, shippingFee: e.target.value })} className="dz-input" />
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "24px" }}>
+            <div>
+              <label style={{ display: "block", fontSize: "12px", color: "var(--text-secondary)", marginBottom: "6px" }}>Free Shipping Above (Rs.)</label>
+              <input type="number" value={form.freeShippingThreshold} onChange={(e) => setForm({ ...form, freeShippingThreshold: e.target.value })} className="dz-input" />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: "12px", color: "var(--text-secondary)", marginBottom: "6px" }}>Shipping Fee (Rs.)</label>
+              <input type="number" value={form.shippingFee} onChange={(e) => setForm({ ...form, shippingFee: e.target.value })} className="dz-input" />
+            </div>
           </div>
         </div>
+
         <button type="submit" disabled={saving} className="dz-btn-primary" style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
           <Save size={16} /> {saving ? "Saving..." : "Save Settings"}
         </button>
@@ -173,7 +199,6 @@ export default function AdminSettingsPage() {
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "24px" }}>
           
-          {/* CHATS */}
           <div>
             <h3 style={{ fontSize: "14px", fontWeight: "600", marginBottom: "10px", display: "flex", alignItems: "center", gap: "6px" }}><MessageSquare size={16} /> Customer Chats</h3>
             {chats.length === 0 ? <p style={{ fontSize: "12px", color: "var(--text-muted)" }}>No chats found.</p> : (
@@ -188,7 +213,6 @@ export default function AdminSettingsPage() {
             )}
           </div>
 
-          {/* PRODUCTS */}
           <div>
             <h3 style={{ fontSize: "14px", fontWeight: "600", marginBottom: "10px", display: "flex", alignItems: "center", gap: "6px" }}><Package size={16} /> Products</h3>
             {products.length === 0 ? <p style={{ fontSize: "12px", color: "var(--text-muted)" }}>No products found.</p> : (
@@ -203,7 +227,6 @@ export default function AdminSettingsPage() {
             )}
           </div>
 
-          {/* OFFERS */}
           <div>
             <h3 style={{ fontSize: "14px", fontWeight: "600", marginBottom: "10px", display: "flex", alignItems: "center", gap: "6px" }}><ImageIcon size={16} /> Banners / Offers</h3>
             {offers.length === 0 ? <p style={{ fontSize: "12px", color: "var(--text-muted)" }}>No banners found.</p> : (

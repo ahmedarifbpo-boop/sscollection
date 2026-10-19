@@ -16,11 +16,17 @@ export async function GET() {
           address: "Karachi, Pakistan",
           freeShippingThreshold: 5000,
           shippingFee: 250,
+          enableFreeShipping: true, // Default ON
         },
       });
     }
 
-    return NextResponse.json({ settings });
+    // Cache bypass headers taake har baar naya data aaye
+    return NextResponse.json({ settings }, {
+      headers: {
+        'Cache-Control': 'no-store, max-age=0',
+      },
+    });
   } catch (error) {
     return NextResponse.json({ error: "Failed to fetch settings" }, { status: 500 });
   }

@@ -118,5 +118,6 @@ model Settings {
   address                String?
   freeShippingThreshold  Float    @default(5000)
   shippingFee            Float    @default(250)
+  enableFreeShipping     Boolean  @default(true)
   updatedAt              DateTime @updatedAt
 }
