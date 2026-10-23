@@ -2,7 +2,7 @@ import { MetadataRoute } from 'next'
 import { prisma } from "@/lib/prisma";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  // Aapki website ka main URL (Vercel wala link ya domain)
+  // Dhyan dein: Aakhir mein koi slash (/) nahi hona chahiye
   const baseUrl = 'https://sscollection-2iih.vercel.app'; 
 
   // 1. Main Pages
@@ -13,7 +13,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 1,
   }));
 
-  // 2. Saare Products Database se layein
+  // 2. Saare Products
   const products = await prisma.product.findMany({
     select: { id: true, updatedAt: true },
   });
