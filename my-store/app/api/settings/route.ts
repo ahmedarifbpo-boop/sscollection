@@ -16,7 +16,8 @@ export async function GET() {
           address: "Karachi, Pakistan",
           freeShippingThreshold: 5000,
           shippingFee: 250,
-          enableFreeShipping: true, // Default ON
+          enableFreeShipping: true,
+          logoUrl: "", // Default khali
         },
       });
     }
@@ -28,27 +29,53 @@ export async function GET() {
       },
     });
   } catch (error) {
+    console.error("GET settings error:", error);
     return NextResponse.json({ error: "Failed to fetch settings" }, { status: 500 });
   }
 }
 
-// POST: Settings save karna
+// POST: Settings save karna (Logo, Shipping, Name waghera)
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    
+    // Sirf allowed fields ko database mein update karne ke liye pick karo
+    const { 
+      storeName, 
+      contactEmail, 
+      contactPhone, 
+      address, 
+      freeShippingThreshold, 
+      shippingFee, 
+      enableFreeShipping,
+      logoUrl 
+    } = body;
+
+    const dataToUpdate = {
+      storeName,
+      contactEmail,
+      contactPhone,
+      address,
+      freeShippingThreshold: Number(freeShippingThreshold),
+      shippingFee: Number(shippingFee),
+      enableFreeShipping: Boolean(enableFreeShipping),
+      logoUrl, // 👈 Logo URL save hoga
+    };
+
     const existing = await prisma.settings.findFirst();
 
     if (existing) {
       await prisma.settings.update({
         where: { id: existing.id },
-        data: body,
+        data: dataToUpdate,
       });
     } else {
-      await prisma.settings.create({ data: body });
+      await prisma.settings.create({ data: dataToUpdate });
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    console.error("POST settings error:", error);
     return NextResponse.json({ error: "Failed to save settings" }, { status: 500 });
   }
 }
