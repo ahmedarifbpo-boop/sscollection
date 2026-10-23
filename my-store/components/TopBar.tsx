@@ -27,7 +27,8 @@ export default function TopBar() {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/settings", { cache: "no-store" })
+    // Cache fix: Timestamp add kiya taake naya logo foran show ho
+    fetch(`/api/settings?t=${Date.now()}`)
       .then(r => r.json())
       .then(d => {
         if (d.settings?.logoUrl) setLogoUrl(d.settings.logoUrl);
@@ -56,7 +57,7 @@ export default function TopBar() {
           flexWrap: "wrap", // Mobile pe wrap ho jaye
         }}
       >
-        {/* Logo Section (Dynamic) */}
+        {/* Gol (Circular) Logo Section */}
         <Link
           href="/"
           style={{
@@ -65,13 +66,29 @@ export default function TopBar() {
             flexShrink: 0,
           }}
         >
-          {logoUrl ? (
-            <img src={logoUrl} alt="Logo" style={{ height: "40px", objectFit: "contain" }} />
-          ) : (
-            <span style={{ color: "#fff", fontSize: "20px", fontWeight: "700", whiteSpace: "nowrap" }}>
-              S.S Collection
-            </span>
-          )}
+          <div style={{
+            width: "48px",
+            height: "48px",
+            borderRadius: "50%", // Gol shape
+            overflow: "hidden",
+            background: "#fff", // Fallback background
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            border: "2px solid #fff", // Safed border taake orange background par ubhar kar aaye
+            boxShadow: "0 2px 5px rgba(0,0,0,0.2)"
+          }}>
+            {logoUrl ? (
+              <img 
+                src={logoUrl} 
+                alt="S.S Collection" 
+                style={{ width: "100%", height: "100%", objectFit: "cover" }} 
+              />
+            ) : (
+              // Agar logo upload nahi hua to default "S" dikhega
+              <span style={{ fontSize: "20px", fontWeight: "700", color: "var(--accent)" }}>S</span>
+            )}
+          </div>
         </Link>
 
         {/* Search */}
