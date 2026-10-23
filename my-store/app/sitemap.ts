@@ -2,11 +2,11 @@ import { MetadataRoute } from 'next'
 import { prisma } from "@/lib/prisma";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  // Dhyan dein: Aakhir mein koi slash (/) nahi hona chahiye
-  const baseUrl = 'https://sscollection-2iih.vercel.app'; 
+  // Aakhir mein slash (/) add kiya hai taake GSC property se match kare
+  const baseUrl = 'https://sscollection-2iih.vercel.app/'; 
 
-  // 1. Main Pages
-  const routes = ['', '/cart', '/search'].map((route) => ({
+  // 1. Main Pages (Ab baseUrl mein slash hai, to route se pehle wala slash hata dein)
+  const routes = ['', 'cart', 'search'].map((route) => ({
     url: `${baseUrl}${route}`,
     lastModified: new Date(),
     changeFrequency: 'daily' as const,
@@ -19,7 +19,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   });
 
   const productRoutes = products.map((product) => ({
-    url: `${baseUrl}/product/${product.id}`,
+    url: `${baseUrl}product/${product.id}`,
     lastModified: product.updatedAt,
     changeFrequency: 'weekly' as const,
     priority: 0.8,
