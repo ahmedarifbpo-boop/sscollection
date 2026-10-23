@@ -225,3 +225,39 @@ input, textarea, select {
   h1 { font-size: 20px !important; }
   h2 { font-size: 16px !important; }
 }
+
+/* =========================================
+   ADMIN PANEL MOBILE FIXES
+   ========================================= */
+@media (max-width: 768px) {
+  /* Grids ko single column banao */
+  .admin-grid, 
+  [style*="grid-template-columns"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Tables ko scrollable banao taake screen se bahar na jayein */
+  .admin-table-container {
+    overflow-x: auto;
+    width: 100%;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Headings aur text ko thoda chota karo */
+  h1 { font-size: 20px !important; }
+  h2 { font-size: 16px !important; }
+
+  /* Buttons ko mobile par aaram se click kiya ja sake */
+  button, .dz-btn-primary {
+    min-height: 40px;
+  }
+}
+
+/* ADMIN MOBILE FIXES */
+@media (max-width: 768px) {
+  .admin-grid {
+    grid-template-columns: 1fr !important;
+  }
+  h1 { font-size: 20px !important; }
+  h2 { font-size: 16px !important; }
+}

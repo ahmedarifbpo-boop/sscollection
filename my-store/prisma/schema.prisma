@@ -119,5 +119,6 @@ model Settings {
   freeShippingThreshold  Float    @default(5000)
   shippingFee            Float    @default(250)
   enableFreeShipping     Boolean  @default(true)
+  logoUrl                String?  // 👈 Ye naya add hua hai
   updatedAt              DateTime @updatedAt
 }
