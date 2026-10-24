@@ -5,11 +5,11 @@ export async function GET() {
   try {
     const visitors = await prisma.visitorLog.findMany({
       orderBy: { createdAt: "desc" },
-      take: 100, 
+      take: 100,
     });
     return NextResponse.json({ visitors });
   } catch (error: any) {
-    console.error("Visitors GET error:", error);
+    console.error("GET ERROR:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -25,7 +25,6 @@ export async function DELETE(request: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error("Visitors DELETE error:", error);
     return NextResponse.json({ error: "Failed to delete" }, { status: 500 });
   }
 }

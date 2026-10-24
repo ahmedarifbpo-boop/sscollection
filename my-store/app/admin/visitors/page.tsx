@@ -16,22 +16,25 @@ export default function AdminVisitorsPage() {
   const [visitors, setVisitors] = useState<Visitor[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
     const admin = localStorage.getItem("ss-admin");
     if (!admin) { router.push("/admin/login"); return; }
     
-    // cache no-store lagaya hai taake foran data aaye
-    fetch("/api/admin/visitors", { cache: "no-store" })
-      .then(res => res.json())
-      .then(data => {
-        if (data.visitors) {
-          setVisitors(data.visitors);
-        } else {
-          console.error("API Error:", data.error);
-        }
+    fetch("/api/admin/visitors")
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to load");
+        return data;
       })
-      .catch(err => console.error("Fetch error:", err))
+      .then(data => {
+        setVisitors(data.visitors || []);
+      })
+      .catch(err => {
+        console.error(err);
+        setErrorMsg(err.message);
+      })
       .finally(() => setLoading(false));
   }, [router]);
 
@@ -77,6 +80,13 @@ export default function AdminVisitorsPage() {
           <Trash2 size={16} /> Delete Selected ({selected.length})
         </button>
       </div>
+
+      {/* ERROR MESSAGE YAHAN SHOW HOGA */}
+      {errorMsg && (
+        <div style={{ background: "#FEE", color: "#EF4444", padding: "16px", borderRadius: "3px", marginBottom: "16px" }}>
+          <strong>Error:</strong> {errorMsg}
+        </div>
+      )}
 
       <div className="dz-card" style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "600px" }}>
