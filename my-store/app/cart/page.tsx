@@ -12,7 +12,8 @@ export default function CartPage() {
   const router = useRouter();
   const { items, removeFromCart, updateQuantity, totalPrice, totalItems, clearCart } = useCart();
 
-  const [form, setForm] = useState({ name: "", phone: "", address: "", notes: "" });
+  // Email add kiya gaya hai form mein
+  const [form, setForm] = useState({ name: "", phone: "", email: "", address: "", notes: "" });
   const [showSuccess, setShowSuccess] = useState(false);
   const [orderId, setOrderId] = useState("");
   const [orderSnapshot, setOrderSnapshot] = useState<any>(null);
@@ -59,6 +60,7 @@ export default function CartPage() {
         body: JSON.stringify({
           customerName: form.name,
           customerPhone: form.phone,
+          customerEmail: form.email, // 👈 Email API ko bheji ja rahi hai
           customerAddress: form.address,
           notes: form.notes,
           items: orderItems,
@@ -87,7 +89,7 @@ export default function CartPage() {
   const handleCloseSuccess = () => {
     setShowSuccess(false);
     clearCart();
-    setForm({ name: "", phone: "", address: "", notes: "" });
+    setForm({ name: "", phone: "", email: "", address: "", notes: "" }); // Reset form
     router.push("/");
   };
 
@@ -165,12 +167,20 @@ export default function CartPage() {
 
               <form onSubmit={handlePlaceOrder} className="dz-card" style={{ padding: "20px" }}>
                 <h2 style={{ fontSize: "16px", fontWeight: "500", marginBottom: "16px" }}>Delivery Details</h2>
+                
                 <label style={{ display: "block", fontSize: "12px", marginBottom: "6px" }}>Full Name</label>
                 <input type="text" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ali Khan" className="dz-input" style={{ marginBottom: "12px" }} />
+                
                 <label style={{ display: "block", fontSize: "12px", marginBottom: "6px" }}>Phone Number</label>
                 <input type="tel" required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+92 300 1234567" className="dz-input" style={{ marginBottom: "12px" }} />
+                
+                {/* NAYA: EMAIL INPUT */}
+                <label style={{ display: "block", fontSize: "12px", marginBottom: "6px" }}>Email Address (For Order Confirmation)</label>
+                <input type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="you@example.com" className="dz-input" style={{ marginBottom: "12px" }} />
+
                 <label style={{ display: "block", fontSize: "12px", marginBottom: "6px" }}>Delivery Address</label>
                 <textarea required rows={3} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="House #, Street" className="dz-input" style={{ resize: "none", marginBottom: "16px" }} />
+                
                 <div style={{ background: "var(--bg-alt)", padding: "12px", borderRadius: "3px", marginBottom: "16px" }}>
                   <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>PAYMENT METHOD</div>
                   <div style={{ fontSize: "14px", fontWeight: "500" }}>Cash on Delivery</div>
@@ -193,6 +203,7 @@ export default function CartPage() {
               <CheckCircle2 size={48} style={{ color: "#10B981", marginBottom: "12px" }} />
               <h2 style={{ fontSize: "20px", fontWeight: "700" }}>Order Placed!</h2>
               <p style={{ fontSize: "13px", color: "#666" }}>Order ID: <strong>{orderId}</strong></p>
+              <p style={{ fontSize: "13px", color: "var(--accent)", marginTop: "8px" }}>Please check your email to verify the order.</p>
             </div>
             <button onClick={handleCloseSuccess} className="dz-btn-primary" style={{ width: "100%", padding: "12px" }}>Continue Shopping</button>
           </div>

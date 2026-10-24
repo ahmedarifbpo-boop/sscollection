@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Resend } from "resend";
+import { generateOrderEmail } from "@/lib/email-template";
 
 // GET /api/orders — saare orders (admin panel ke liye)
 export async function GET() {
@@ -93,6 +95,36 @@ export async function POST(request: Request) {
         items: true,
       },
     });
+
+    // 🟢 NAYA CODE: Email bhejne ke liye (Resend)
+    try {
+      if (customerEmail) {
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        
+        // Verification token generate karo
+        const token = crypto.randomUUID();
+
+        // Token database mein save karo
+        await prisma.order.update({
+          where: { id: order.id },
+          data: { verificationToken: token },
+        });
+
+        // Verification Link banao (Domain change karna ho to yahan badlein)
+        const verifyLink = `https://sscollection-2iih.vercel.app/verify-order/${token}`;
+
+        // Email bhejo
+        await resend.emails.send({
+          from: "S.S Collection <onboarding@resend.dev>", // Filhaal testing ke liye ye use karein
+          to: customerEmail,
+          subject: `Order Confirmation - ${orderNumber}`,
+          html: generateOrderEmail(orderNumber, customerName, verifyLink, total),
+        });
+      }
+    } catch (emailError) {
+      console.error("Email sending failed:", emailError);
+      // Agar email fail ho jaye, to order fail nahi hoga (Customer ko email na milne par bhi order place rahega)
+    }
 
     return NextResponse.json({ order }, { status: 201 });
   } catch (error) {
