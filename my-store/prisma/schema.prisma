@@ -27,22 +27,27 @@ model Product {
 
 // ============ ORDERS ============
 model Order {
-  id               String   @id @default(cuid())
-  orderNumber      String   @unique
-  customerName     String
-  customerPhone    String
-  customerAddress  String
-  customerEmail    String?
-  notes            String?
-  subtotal         Float
-  shipping         Float    @default(0)
-  total            Float
-  status           String   @default("PENDING")
-  paymentMethod    String   @default("COD")
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                String   @id @default(cuid())
+  orderNumber       String   @unique
+  customerName      String
+  customerPhone     String
+  customerAddress   String
+  customerEmail     String?
+  notes             String?
+  subtotal          Float
+  shipping          Float    @default(0)
+  total             Float
+  status            String   @default("PENDING")
+  paymentMethod     String   @default("COD")
+  
+  // Naye Features (Email Verification ke liye)
+  isVerified        Boolean  @default(false)
+  verificationToken String?  @unique // Email verify karne ka unique link
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  items            OrderItem[]
+  items             OrderItem[]
 }
 
 model OrderItem {
