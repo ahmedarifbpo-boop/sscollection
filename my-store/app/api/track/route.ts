@@ -6,7 +6,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { page } = body;
 
-    // IP address nikalne ki koshish (Vercel headers se)
+    // IP address nikalna (Vercel headers se)
     const forwarded = request.headers.get("x-forwarded-for");
     const ip = forwarded ? forwarded.split(",")[0] : "Unknown IP";
 
@@ -19,6 +19,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    console.error("Track error:", error);
     return NextResponse.json({ error: "Failed to track" }, { status: 500 });
   }
 }

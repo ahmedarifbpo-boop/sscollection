@@ -15,15 +15,24 @@ export default function AdminVisitorsPage() {
   const router = useRouter();
   const [visitors, setVisitors] = useState<Visitor[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const admin = localStorage.getItem("ss-admin");
     if (!admin) { router.push("/admin/login"); return; }
     
-    fetch("/api/admin/visitors")
+    // cache no-store lagaya hai taake foran data aaye
+    fetch("/api/admin/visitors", { cache: "no-store" })
       .then(res => res.json())
-      .then(data => setVisitors(data.visitors || []));
+      .then(data => {
+        if (data.visitors) {
+          setVisitors(data.visitors);
+        } else {
+          console.error("API Error:", data.error);
+        }
+      })
+      .catch(err => console.error("Fetch error:", err))
+      .finally(() => setLoading(false));
   }, [router]);
 
   const toggleSelect = (id: string) => {
@@ -38,7 +47,6 @@ export default function AdminVisitorsPage() {
   const handleDelete = async () => {
     if (selected.length === 0) return;
     if (!window.confirm(`Delete ${selected.length} selected records?`)) return;
-    setIsDeleting(true);
     try {
       await fetch("/api/admin/visitors", {
         method: "DELETE",
@@ -49,14 +57,14 @@ export default function AdminVisitorsPage() {
       setSelected([]);
     } catch (e) {
       alert("Failed to delete");
-    } finally {
-      setIsDeleting(false);
     }
   };
 
   const formatDate = (iso: string) => {
     return new Date(iso).toLocaleString("en-PK", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
   };
+
+  if (loading) return <div style={{ padding: "60px", textAlign: "center" }}>Loading...</div>;
 
   return (
     <div>
@@ -65,7 +73,7 @@ export default function AdminVisitorsPage() {
           <h1 style={{ fontSize: "22px", fontWeight: "500", color: "var(--text-primary)" }}>Visitor Tracking</h1>
           <p style={{ fontSize: "13px", color: "var(--text-muted)" }}>IP, Page, Date and Time logs</p>
         </div>
-        <button onClick={handleDelete} disabled={selected.length === 0 || isDeleting} className="dz-btn-secondary" style={{ display: "flex", alignItems: "center", gap: "6px", color: selected.length > 0 ? "#EF4444" : "var(--text-muted)", borderColor: selected.length > 0 ? "#EF4444" : "var(--border)" }}>
+        <button onClick={handleDelete} disabled={selected.length === 0} className="dz-btn-secondary" style={{ display: "flex", alignItems: "center", gap: "6px", color: selected.length > 0 ? "#EF4444" : "var(--text-muted)", borderColor: selected.length > 0 ? "#EF4444" : "var(--border)" }}>
           <Trash2 size={16} /> Delete Selected ({selected.length})
         </button>
       </div>
@@ -85,18 +93,24 @@ export default function AdminVisitorsPage() {
             </tr>
           </thead>
           <tbody>
-            {visitors.map(v => (
-              <tr key={v.id} style={{ borderBottom: "1px solid var(--border)" }}>
-                <td style={{ padding: "12px", textAlign: "center" }}>
-                  <button onClick={() => toggleSelect(v.id)} style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
-                    {selected.includes(v.id) ? <CheckSquare size={18} style={{ color: "var(--accent)" }} /> : <Square size={18} style={{ color: "var(--text-muted)" }} />}
-                  </button>
-                </td>
-                <td style={{ padding: "12px", fontSize: "13px", color: "var(--text-primary)" }}>{v.ip}</td>
-                <td style={{ padding: "12px", fontSize: "13px", color: "var(--text-secondary)" }}>{v.page}</td>
-                <td style={{ padding: "12px", fontSize: "13px", color: "var(--text-muted)" }}>{formatDate(v.createdAt)}</td>
+            {visitors.length === 0 ? (
+              <tr>
+                <td colSpan={4} style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)", fontSize: "14px" }}>No visitors tracked yet.</td>
               </tr>
-            ))}
+            ) : (
+              visitors.map(v => (
+                <tr key={v.id} style={{ borderBottom: "1px solid var(--border)" }}>
+                  <td style={{ padding: "12px", textAlign: "center" }}>
+                    <button onClick={() => toggleSelect(v.id)} style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
+                      {selected.includes(v.id) ? <CheckSquare size={18} style={{ color: "var(--accent)" }} /> : <Square size={18} style={{ color: "var(--text-muted)" }} />}
+                    </button>
+                  </td>
+                  <td style={{ padding: "12px", fontSize: "13px", color: "var(--text-primary)" }}>{v.ip}</td>
+                  <td style={{ padding: "12px", fontSize: "13px", color: "var(--text-secondary)" }}>{v.page}</td>
+                  <td style={{ padding: "12px", fontSize: "13px", color: "var(--text-muted)" }}>{formatDate(v.createdAt)}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>

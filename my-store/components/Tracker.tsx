@@ -16,7 +16,7 @@ export default function Tracker() {
           body: JSON.stringify({ page: pathname }),
         });
       } catch (e) {
-        // Ignore tracking errors
+        console.log("Tracking failed", e);
       }
     };
 
