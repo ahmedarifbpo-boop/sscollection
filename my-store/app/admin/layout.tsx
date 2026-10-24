@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Package, ShoppingBag, MessageSquare, Tag, Settings, LogOut, Store, Sparkles, Bell, X, Menu, TrendingUp } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingBag, MessageSquare, Tag, Settings, LogOut, Store, Sparkles, Bell, X, Menu, TrendingUp, Users } from "lucide-react";
 
 const navItems = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
@@ -13,6 +13,7 @@ const navItems = [
   { label: "Categories", href: "/admin/categories", icon: Tag },
   { label: "Offers", href: "/admin/offers", icon: Sparkles },
   { label: "Live Chat", href: "/admin/chat", icon: MessageSquare },
+  { label: "Visitors", href: "/admin/visitors", icon: Users }, // 👈 Naya Menu Add Hua
   { label: "Settings", href: "/admin/settings", icon: Settings },
 ];
 

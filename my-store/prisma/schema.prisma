@@ -122,3 +122,10 @@ model Settings {
   logoUrl                String?  // 👈 Ye naya add hua hai
   updatedAt              DateTime @updatedAt
 }
+
+model VisitorLog {
+  id        String   @id @default(cuid())
+  ip        String
+  page      String
+  createdAt DateTime @default(now())
+}
