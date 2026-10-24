@@ -109,6 +109,7 @@ model Admin {
   name       String
   createdAt  DateTime @default(now())
 }
+
 // ============ Settings ============
 model Settings {
   id                     String   @id @default(cuid())
@@ -119,17 +120,14 @@ model Settings {
   freeShippingThreshold  Float    @default(5000)
   shippingFee            Float    @default(250)
   enableFreeShipping     Boolean  @default(true)
-  logoUrl                String?  // 👈 Ye naya add hua hai
+  logoUrl                String?
   updatedAt              DateTime @updatedAt
 }
 
+// ============ VISITOR LOG ============
 model VisitorLog {
   id        String   @id @default(cuid())
   ip        String
   page      String
   createdAt DateTime @default(now())
-}
-
-datasource db {
-  provider = "postgresql"
 }
