@@ -5,7 +5,6 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-// Connection pool setup
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
 });
