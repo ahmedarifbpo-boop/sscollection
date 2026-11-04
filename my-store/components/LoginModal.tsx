@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X } from "lucide-react";
+import { X, Mail, Phone } from "lucide-react";
 
 interface Props {
   isOpen: boolean;
@@ -11,20 +11,35 @@ interface Props {
 
 export default function LoginModal({ isOpen, onClose, onSwitchToSignup }: Props) {
   const [email, setEmail] = useState("");
-  const [submitted, setSubmitted] = useState(false);
+  const [phone, setPhone] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) return;
-    setSubmitted(true);
-    setTimeout(() => {
-      alert(`Login requested for: ${email}`);
-      setSubmitted(false);
-      setEmail("");
-      onClose();
-    }, 300);
+    setError("");
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/customer/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, phone }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      // Login Success: Save to localStorage and reload
+      localStorage.setItem("ss-customer", JSON.stringify(data.customer));
+      window.location.reload(); 
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -47,12 +62,14 @@ export default function LoginModal({ isOpen, onClose, onSwitchToSignup }: Props)
         onClick={(e) => e.stopPropagation()}
         style={{
           background: "#fff",
-          borderRadius: "3px",
+          borderRadius: "6px",
           width: "100%",
           maxWidth: "420px",
-          padding: "32px 28px",
+          padding: "24px",
           position: "relative",
           boxShadow: "0 10px 40px rgba(0,0,0,0.15)",
+          maxHeight: "90vh",
+          overflowY: "auto",
         }}
       >
         {/* Close */}
@@ -70,81 +87,85 @@ export default function LoginModal({ isOpen, onClose, onSwitchToSignup }: Props)
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
+            cursor: "pointer",
           }}
-          aria-label="Close"
         >
           <X size={20} />
         </button>
 
         {/* Header */}
         <div style={{ marginBottom: "24px" }}>
-          <h2
-            style={{
-              fontSize: "22px",
-              fontWeight: "500",
-              color: "#000",
-              marginBottom: "6px",
-            }}
-          >
+          <h2 style={{ fontSize: "22px", fontWeight: "600", color: "#1B1B1C", marginBottom: "6px" }}>
             Welcome back
           </h2>
-          <p style={{ fontSize: "14px", color: "#999" }}>
-            Enter your email to continue
+          <p style={{ fontSize: "14px", color: "#6B7280" }}>
+            Enter your email and phone to login
           </p>
         </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit}>
-          <label
-            style={{
-              display: "block",
-              fontSize: "12px",
-              fontWeight: "500",
-              color: "#424242",
-              marginBottom: "6px",
-            }}
-          >
+          {error && (
+            <div style={{ background: "#FEE", color: "#EF4444", padding: "10px", borderRadius: "4px", fontSize: "13px", marginBottom: "16px" }}>
+              {error}
+            </div>
+          )}
+
+          <label style={{ display: "block", fontSize: "12px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>
             Email Address
           </label>
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            className="dz-input"
-            style={{ marginBottom: "20px" }}
-          />
+          <div style={{ position: "relative", marginBottom: "16px" }}>
+            <Mail size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#9CA3AF" }} />
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              className="dz-input"
+              style={{ paddingLeft: "36px" }}
+            />
+          </div>
+
+          <label style={{ display: "block", fontSize: "12px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>
+            Phone Number
+          </label>
+          <div style={{ position: "relative", marginBottom: "20px" }}>
+            <Phone size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#9CA3AF" }} />
+            <input
+              type="tel"
+              required
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="+92 300 1234567"
+              className="dz-input"
+              style={{ paddingLeft: "36px" }}
+            />
+          </div>
 
           <button
             type="submit"
-            disabled={submitted}
+            disabled={loading}
             className="dz-btn-primary"
             style={{ width: "100%", padding: "12px" }}
           >
-            {submitted ? "Please wait..." : "Login"}
+            {loading ? "Logging in..." : "Login"}
           </button>
         </form>
 
         {/* Switch */}
-        <p
-          style={{
-            marginTop: "20px",
-            textAlign: "center",
-            fontSize: "13px",
-            color: "#999",
-          }}
-        >
+        <p style={{ marginTop: "20px", textAlign: "center", fontSize: "13px", color: "#6B7280" }}>
           Don&apos;t have an account?{" "}
           <button
             onClick={onSwitchToSignup}
             style={{
               background: "transparent",
               border: "none",
-              color: "#F85606",
-              fontWeight: "500",
+              color: "var(--accent)",
+              fontWeight: "600",
               fontSize: "13px",
               padding: 0,
+              cursor: "pointer",
             }}
           >
             Sign up

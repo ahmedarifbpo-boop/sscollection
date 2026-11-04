@@ -11,6 +11,7 @@ import {
   Truck,
   CheckCircle2,
   XCircle,
+  Coins,
 } from "lucide-react";
 
 interface OrderItem {
@@ -19,6 +20,11 @@ interface OrderItem {
   price: number;
   quantity: number;
   image: string;
+}
+
+interface Customer {
+  referralCode: string;
+  referredBy: string | null;
 }
 
 interface Order {
@@ -32,10 +38,13 @@ interface Order {
   subtotal: number;
   shipping: number;
   total: number;
+  coinsUsed: number;
+  coinsEarned: number;
   status: string;
   paymentMethod: string;
   createdAt: string;
   items: OrderItem[];
+  customer: Customer | null;
 }
 
 const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
@@ -157,41 +166,21 @@ export default function AdminOrdersPage() {
           {filtered.map((order) => {
             const cfg = statusConfig[order.status] || statusConfig.PENDING;
             const StatusIcon = cfg.icon;
+            
+            // Check karo ke coins involved hain ya nahi
+            const hasCoins = order.coinsUsed > 0 || order.coinsEarned > 0 || order.customer?.referredBy;
+
             return (
-              <div
-                key={order.id}
-                className="dz-card"
-                style={{ padding: "16px" }}
-              >
+              <div key={order.id} className="dz-card" style={{ padding: "16px" }}>
+                
                 {/* Top row */}
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "flex-start",
-                    marginBottom: "12px",
-                    flexWrap: "wrap",
-                    gap: "12px",
-                  }}
-                >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px", flexWrap: "wrap", gap: "12px" }}>
                   <div>
                     <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px" }}>
                       <span style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)" }}>
                         {order.orderNumber}
                       </span>
-                      <span
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "4px",
-                          background: `${cfg.color}15`,
-                          color: cfg.color,
-                          padding: "3px 8px",
-                          borderRadius: "3px",
-                          fontSize: "11px",
-                          fontWeight: "700",
-                        }}
-                      >
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: `${cfg.color}15`, color: cfg.color, padding: "3px 8px", borderRadius: "3px", fontSize: "11px", fontWeight: "700" }}>
                         <StatusIcon size={12} />
                         {cfg.label}
                       </span>
@@ -201,28 +190,28 @@ export default function AdminOrdersPage() {
                     </div>
                   </div>
 
+                  {/* Total aur Coins Section */}
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "2px" }}>
                       Total (COD)
                     </div>
-                    <div style={{ fontSize: "18px", fontWeight: "700", color: "var(--accent)" }}>
+                    <div style={{ fontSize: "18px", fontWeight: "700", color: "var(--accent)", marginBottom: "4px" }}>
                       Rs. {order.total.toLocaleString()}
                     </div>
+                    
+                    {/* Naya Coins Badge */}
+                    {hasCoins && (
+                      <div style={{ display: "inline-flex", flexDirection: "column", alignItems: "flex-end", gap: "2px", background: "#FFFBEB", padding: "4px 8px", borderRadius: "3px", fontSize: "11px", color: "#B45309", border: "1px solid #FDE68A" }}>
+                        {order.coinsUsed > 0 && <span style={{ display: "flex", alignItems: "center", gap: "4px" }}><Coins size={10} /> Used: Rs. {order.coinsUsed.toLocaleString()}</span>}
+                        {order.coinsEarned > 0 && <span style={{ display: "flex", alignItems: "center", gap: "4px" }}><Coins size={10} /> Earned: Rs. {order.coinsEarned.toFixed(0)}</span>}
+                        {order.customer?.referredBy && <span style={{ fontWeight: "600" }}>Ref: {order.customer.referredBy}</span>}
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 {/* Customer */}
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                    gap: "12px",
-                    padding: "12px",
-                    background: "var(--bg-alt)",
-                    borderRadius: "3px",
-                    marginBottom: "12px",
-                  }}
-                >
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px", padding: "12px", background: "var(--bg-alt)", borderRadius: "3px", marginBottom: "12px" }}>
                   <div>
                     <div style={{ fontSize: "10px", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "2px" }}>
                       Customer
@@ -257,17 +246,7 @@ export default function AdminOrdersPage() {
                   <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                     {order.items.map((item) => (
                       <div key={item.id} style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                        <img
-                          src={item.image}
-                          alt={item.name}
-                          style={{
-                            width: "36px",
-                            height: "36px",
-                            objectFit: "cover",
-                            borderRadius: "3px",
-                            flexShrink: 0,
-                          }}
-                        />
+                        <img src={item.image} alt={item.name} style={{ width: "36px", height: "36px", objectFit: "cover", borderRadius: "3px", flexShrink: 0 }} />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div className="line-clamp-1" style={{ fontSize: "12px", color: "var(--text-primary)" }}>
                             {item.name}
@@ -286,20 +265,8 @@ export default function AdminOrdersPage() {
 
                 {/* Actions */}
                 <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", paddingTop: "12px", borderTop: "1px solid var(--border)" }}>
-                  <Link
-                    href={`/admin/orders/${order.id}`}
-                    className="dz-btn-secondary"
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      textDecoration: "none",
-                      fontSize: "12px",
-                      padding: "8px 14px",
-                    }}
-                  >
-                    <Eye size={14} />
-                    View Details
+                  <Link href={`/admin/orders/${order.id}`} className="dz-btn-secondary" style={{ display: "inline-flex", alignItems: "center", gap: "6px", textDecoration: "none", fontSize: "12px", padding: "8px 14px" }}>
+                    <Eye size={14} /> View Details
                   </Link>
                 </div>
               </div>

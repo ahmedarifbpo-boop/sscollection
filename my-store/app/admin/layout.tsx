@@ -3,7 +3,10 @@
 import { Suspense, useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Package, ShoppingBag, MessageSquare, Tag, Settings, LogOut, Store, Sparkles, Bell, X, Menu, TrendingUp, Users } from "lucide-react";
+import {
+  LayoutDashboard, Package, ShoppingBag, MessageSquare, Tag, Settings,
+  LogOut, Store, Sparkles, Bell, X, Menu, TrendingUp, Users, Gift, Coins
+} from "lucide-react";
 
 const navItems = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
@@ -12,8 +15,10 @@ const navItems = [
   { label: "Sales", href: "/admin/sales", icon: TrendingUp },
   { label: "Categories", href: "/admin/categories", icon: Tag },
   { label: "Offers", href: "/admin/offers", icon: Sparkles },
+  { label: "Referrals", href: "/admin/referrals", icon: Gift }, // 👈 Naya
+  { label: "Coins", href: "/admin/coins", icon: Coins },         // 👈 Naya
   { label: "Live Chat", href: "/admin/chat", icon: MessageSquare },
-  { label: "Visitors", href: "/admin/visitors", icon: Users }, // 👈 Naya Menu Add Hua
+  { label: "Visitors", href: "/admin/visitors", icon: Users },
   { label: "Settings", href: "/admin/settings", icon: Settings },
 ];
 
@@ -82,34 +87,81 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
       {isSidebarOpen && <div onClick={() => setIsSidebarOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 45 }} className="sidebar-overlay" />}
 
       <aside className={`sidebar ${isSidebarOpen ? "open" : ""}`} style={{ width: "240px", background: "#1B1B1C", color: "#fff", display: "flex", flexDirection: "column", position: "fixed", top: 0, bottom: 0, left: 0, zIndex: 50 }}>
-        <div style={{ padding: "20px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <Store size={22} style={{ color: "var(--accent)" }} />
-            <div><div style={{ fontSize: "15px", fontWeight: "700", color: "#fff" }}>S.S Collection</div><div style={{ fontSize: "10px", color: "rgba(255,255,255,0.5)", textTransform: "uppercase" }}>Admin Panel</div></div>
+        
+        {/* Brand Section - Thoda Professional kiya */}
+        <div style={{ padding: "24px 20px", borderBottom: "1px solid rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "space-between", background: "linear-gradient(to right, #1B1B1C, #222)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div style={{ background: "var(--accent)", padding: "8px", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Store size={20} color="#fff" />
+            </div>
+            <div>
+              <div style={{ fontSize: "16px", fontWeight: "800", color: "#fff", letterSpacing: "0.5px" }}>S.S Collection</div>
+              <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "1px", fontWeight: "600" }}>Admin Panel</div>
+            </div>
           </div>
           <button className="close-sidebar-btn" onClick={() => setIsSidebarOpen(false)} style={{ background: "transparent", border: "none", color: "#fff" }}><X size={20} /></button>
         </div>
 
-        <nav style={{ flex: 1, padding: "16px 12px", display: "flex", flexDirection: "column", gap: "4px", overflowY: "auto" }}>
+        {/* Nav Items - Scrollable & Professional */}
+        <nav style={{ flex: 1, padding: "16px", display: "flex", flexDirection: "column", gap: "6px", overflowY: "auto" }}>
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href);
             return (
-              <Link key={item.href} href={item.href} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 12px", borderRadius: "3px", fontSize: "13px", fontWeight: "500", color: isActive ? "#fff" : "rgba(255,255,255,0.7)", background: isActive ? "var(--accent)" : "transparent", textDecoration: "none" }}>
-                <Icon size={16} /> <span>{item.label}</span>
+              <Link 
+                key={item.href} 
+                href={item.href} 
+                style={{ 
+                  display: "flex", 
+                  alignItems: "center", 
+                  gap: "12px", 
+                  padding: "12px 16px", 
+                  borderRadius: "6px", 
+                  fontSize: "14px", 
+                  fontWeight: "500", 
+                  color: isActive ? "#fff" : "rgba(255,255,255,0.6)", 
+                  background: isActive ? "var(--accent)" : "transparent", 
+                  textDecoration: "none",
+                  transition: "all 0.2s ease"
+                }}
+              >
+                <Icon size={18} style={{ opacity: isActive ? 1 : 0.7 }} /> 
+                <span>{item.label}</span>
+                {isActive && (
+                  <div style={{ marginLeft: "auto", width: "4px", height: "16px", background: "#fff", borderRadius: "2px" }} />
+                )}
               </Link>
             );
           })}
         </nav>
 
-        <div style={{ padding: "16px 12px", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-          <button onClick={handleLogout} style={{ width: "100%", display: "flex", alignItems: "center", gap: "10px", padding: "10px 12px", borderRadius: "3px", fontSize: "13px", fontWeight: "500", color: "rgba(255,255,255,0.7)", background: "transparent", border: "none", textAlign: "left", cursor: "pointer" }}>
-            <LogOut size={16} /> <span>Logout</span>
+        {/* Logout - Professional */}
+        <div style={{ padding: "20px 16px", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+          <button 
+            onClick={handleLogout} 
+            style={{ 
+              width: "100%", 
+              display: "flex", 
+              alignItems: "center", 
+              gap: "12px", 
+              padding: "12px 16px", 
+              borderRadius: "6px", 
+              fontSize: "14px", 
+              fontWeight: "500", 
+              color: "#EF4444", 
+              background: "rgba(239, 68, 68, 0.1)", 
+              border: "none", 
+              textAlign: "left", 
+              cursor: "pointer",
+              transition: "all 0.2s ease"
+            }}
+          >
+            <LogOut size={18} /> <span>Logout</span>
           </button>
         </div>
       </aside>
 
-      <main className="admin-main" style={{ flex: 1, marginLeft: "240px", padding: "24px", minHeight: "100vh" }}>
+      <main className="admin-main" style={{ flex: 1, marginLeft: "240px", padding: "32px", minHeight: "100vh" }}>
         {children}
       </main>
 

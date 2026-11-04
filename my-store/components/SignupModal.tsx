@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X } from "lucide-react";
+import { X, User, Mail, Phone } from "lucide-react";
 
 interface Props {
   isOpen: boolean;
@@ -11,20 +11,37 @@ interface Props {
 
 export default function SignupModal({ isOpen, onClose, onSwitchToLogin }: Props) {
   const [form, setForm] = useState({ name: "", email: "", phone: "" });
-  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name || !form.email || !form.phone) return;
-    setSubmitted(true);
-    setTimeout(() => {
-      alert(`Account created for: ${form.name} (${form.email})`);
-      setSubmitted(false);
-      setForm({ name: "", email: "", phone: "" });
-      onClose();
-    }, 300);
+    setError("");
+    setLoading(true);
+
+    try {
+      // 1. Signup API ko call karo
+      const res = await fetch("/api/customer/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to sign up");
+
+      // 2. Auto Login: Customer data localStorage mein save karo
+      localStorage.setItem("ss-customer", JSON.stringify(data.customer));
+
+      // 3. Page reload karo taake TopBar update ho jaye aur user login ho jaye
+      window.location.reload();
+      
+    } catch (err: any) {
+      setError(err.message);
+      setLoading(false);
+    }
   };
 
   const update = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
@@ -49,10 +66,10 @@ export default function SignupModal({ isOpen, onClose, onSwitchToLogin }: Props)
         onClick={(e) => e.stopPropagation()}
         style={{
           background: "#fff",
-          borderRadius: "3px",
+          borderRadius: "6px",
           width: "100%",
-          maxWidth: "440px",
-          padding: "32px 28px",
+          maxWidth: "420px",
+          padding: "24px",
           position: "relative",
           boxShadow: "0 10px 40px rgba(0,0,0,0.15)",
           maxHeight: "90vh",
@@ -74,127 +91,97 @@ export default function SignupModal({ isOpen, onClose, onSwitchToLogin }: Props)
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
+            cursor: "pointer",
           }}
-          aria-label="Close"
         >
           <X size={20} />
         </button>
 
         {/* Header */}
         <div style={{ marginBottom: "24px" }}>
-          <h2
-            style={{
-              fontSize: "22px",
-              fontWeight: "500",
-              color: "#000",
-              marginBottom: "6px",
-            }}
-          >
+          <h2 style={{ fontSize: "22px", fontWeight: "600", color: "#1B1B1C", marginBottom: "6px" }}>
             Create your account
           </h2>
-          <p style={{ fontSize: "14px", color: "#999" }}>
+          <p style={{ fontSize: "14px", color: "#6B7280" }}>
             Sign up to start shopping
           </p>
         </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit}>
+          {error && (
+            <div style={{ background: "#FEE", color: "#EF4444", padding: "10px", borderRadius: "4px", fontSize: "13px", marginBottom: "16px" }}>
+              {error}
+            </div>
+          )}
+
           {/* Name */}
-          <label
-            style={{
-              display: "block",
-              fontSize: "12px",
-              fontWeight: "500",
-              color: "#424242",
-              marginBottom: "6px",
-            }}
-          >
+          <label style={{ display: "block", fontSize: "12px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>
             Full Name
           </label>
-          <input
-            type="text"
-            required
-            value={form.name}
-            onChange={(e) => update("name", e.target.value)}
-            placeholder="Ali Khan"
-            className="dz-input"
-            style={{ marginBottom: "16px" }}
-          />
+          <div style={{ position: "relative", marginBottom: "16px" }}>
+            <User size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#9CA3AF" }} />
+            <input
+              type="text"
+              required
+              value={form.name}
+              onChange={(e) => update("name", e.target.value)}
+              placeholder="Ali Khan"
+              className="dz-input"
+              style={{ paddingLeft: "36px" }}
+            />
+          </div>
 
           {/* Email */}
-          <label
-            style={{
-              display: "block",
-              fontSize: "12px",
-              fontWeight: "500",
-              color: "#424242",
-              marginBottom: "6px",
-            }}
-          >
+          <label style={{ display: "block", fontSize: "12px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>
             Email Address
           </label>
-          <input
-            type="email"
-            required
-            value={form.email}
-            onChange={(e) => update("email", e.target.value)}
-            placeholder="you@example.com"
-            className="dz-input"
-            style={{ marginBottom: "16px" }}
-          />
+          <div style={{ position: "relative", marginBottom: "16px" }}>
+            <Mail size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#9CA3AF" }} />
+            <input
+              type="email"
+              required
+              value={form.email}
+              onChange={(e) => update("email", e.target.value)}
+              placeholder="you@example.com"
+              className="dz-input"
+              style={{ paddingLeft: "36px" }}
+            />
+          </div>
 
           {/* Phone */}
-          <label
-            style={{
-              display: "block",
-              fontSize: "12px",
-              fontWeight: "500",
-              color: "#424242",
-              marginBottom: "6px",
-            }}
-          >
+          <label style={{ display: "block", fontSize: "12px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>
             Phone Number
           </label>
-          <input
-            type="tel"
-            required
-            value={form.phone}
-            onChange={(e) => update("phone", e.target.value)}
-            placeholder="+92 300 1234567"
-            className="dz-input"
-            style={{ marginBottom: "20px" }}
-          />
+          <div style={{ position: "relative", marginBottom: "20px" }}>
+            <Phone size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#9CA3AF" }} />
+            <input
+              type="tel"
+              required
+              value={form.phone}
+              onChange={(e) => update("phone", e.target.value)}
+              placeholder="+92 300 1234567"
+              className="dz-input"
+              style={{ paddingLeft: "36px" }}
+            />
+          </div>
 
           <button
             type="submit"
-            disabled={submitted}
+            disabled={loading}
             className="dz-btn-primary"
             style={{ width: "100%", padding: "12px" }}
           >
-            {submitted ? "Creating..." : "Create Account"}
+            {loading ? "Creating..." : "Create Account"}
           </button>
         </form>
 
         {/* Switch */}
-        <p
-          style={{
-            marginTop: "20px",
-            textAlign: "center",
-            fontSize: "13px",
-            color: "#999",
-          }}
-        >
+        <p style={{ marginTop: "20px", textAlign: "center", fontSize: "13px", color: "#6B7280" }}>
           Already have an account?{" "}
           <button
             onClick={onSwitchToLogin}
-            style={{
-              background: "transparent",
-              border: "none",
-              color: "#F85606",
-              fontWeight: "500",
-              fontSize: "13px",
-              padding: 0,
-            }}
+            style={{ background: "transparent", border: "none", color: "var(--accent)", fontWeight: "600", fontSize: "13px", padding: 0, cursor: "pointer" }}
           >
             Login
           </button>

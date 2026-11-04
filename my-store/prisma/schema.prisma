@@ -42,12 +42,18 @@ model Order {
   
   // Naye Features (Email Verification ke liye)
   isVerified        Boolean  @default(false)
-  verificationToken String?  @unique // Email verify karne ka unique link
+  verificationToken String?  @unique
+  
+  // Naya Feature (Referral & Coins ke liye)
+  customerId        String?  // Kis customer ne order kiya
+  coinsUsed         Float    @default(0) // Kitne coins use kiye
+  coinsEarned       Float    @default(0) // Kitne coins mile (3%)
   
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   items             OrderItem[]
+  customer          Customer? @relation(fields: [customerId], references: [id])
 }
 
 model OrderItem {
@@ -135,4 +141,32 @@ model VisitorLog {
   ip        String
   page      String
   createdAt DateTime @default(now())
+}
+
+// ============ CUSTOMER (NEW) ============
+model Customer {
+  id             String   @id @default(cuid())
+  name           String
+  email          String   @unique
+  phone          String   @unique
+  referralCode   String   @unique // Har customer ka apna code
+  referredBy     String?  // Jisne refer kiya (uska code)
+  coins          Float    @default(0)
+  totalReferrals Int      @default(0)
+  hasOrdered     Boolean  @default(false) // Pehla order hua ya nahi
+  canRefer       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  orders         Order[]
+}
+
+// ============ REFERRAL LOG (NEW) ============
+model ReferralLog {
+  id             String   @id @default(cuid())
+  referrerCode   String   // Jisne refer kiya (code)
+  referredEmail  String   // Naye customer ki email
+  status         String   @default("PENDING") // PENDING, COMPLETED
+  coinsAwarded   Float    @default(0)
+  createdAt      DateTime @default(now())
 }
