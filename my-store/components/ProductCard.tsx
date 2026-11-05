@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image"; // 👈 Next.js Image import kiya
 import { Star, ShoppingCart, Check } from "lucide-react";
 import { useCart } from "@/lib/cart";
 
@@ -43,9 +44,18 @@ export default function ProductCard({ product }: { product: Product }) {
     <div className="dz-card dz-card-hover" style={{ overflow: "hidden", display: "flex", flexDirection: "column" }}>
       <Link href={`/product/${product.id}`} style={{ display: "block", textDecoration: "none" }}>
         <div style={{ position: "relative", aspectRatio: "1 / 1", overflow: "hidden", background: "var(--bg-alt)" }}>
-          <img src={product.image} alt={product.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          
+          {/* 👇 Yahan <img> ki jagah <Image> use kiya hai */}
+          <Image 
+            src={product.image} 
+            alt={product.name} 
+            fill
+            sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
+            style={{ objectFit: "cover" }} 
+          />
+
           {discount > 0 && (
-            <span style={{ position: "absolute", top: "8px", left: "8px", background: "var(--accent)", color: "#fff", fontSize: "11px", fontWeight: "700", padding: "3px 8px", borderRadius: "2px" }}>
+            <span style={{ position: "absolute", top: "8px", left: "8px", background: "var(--accent)", color: "#fff", fontSize: "11px", fontWeight: "700", padding: "3px 8px", borderRadius: "2px", zIndex: 10 }}>
               -{discount}%
             </span>
           )}
