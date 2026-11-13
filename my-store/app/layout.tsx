@@ -1,5 +1,6 @@
 
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
 import "./globals.css";
 import { CartProvider } from "@/lib/cart";
 import { ChatProvider } from "@/lib/chat";
@@ -29,7 +30,11 @@ export default function RootLayout({
         <ChatProvider>
           <CartProvider>
             <CartToast />
-            <Tracker />
+
+            <Suspense fallback={null}>
+              <Tracker />
+            </Suspense>
+
             <ClientLayout>{children}</ClientLayout>
           </CartProvider>
         </ChatProvider>
