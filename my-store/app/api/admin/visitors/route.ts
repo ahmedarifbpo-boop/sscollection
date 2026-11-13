@@ -1,17 +1,27 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { verifyAdminRequest } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+// GET: Visitors load karna
+export async function GET(request: Request) {
   try {
+    // Server-side admin authentication
+    if (!verifyAdminRequest(request)) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
     const visitors = await prisma.visitorLog.findMany({
       orderBy: { createdAt: "desc" },
       take: 100,
     });
 
-    // Product IDs ko names mein convert karne ke liye map
+    // Product IDs ko names mein convert karna
     const productIds = [
       ...new Set(
         visitors
@@ -23,7 +33,10 @@ export async function GET() {
     const products = productIds.length
       ? await prisma.product.findMany({
           where: { id: { in: productIds } },
-          select: { id: true, name: true },
+          select: {
+            id: true,
+            name: true,
+          },
         })
       : [];
 
@@ -56,15 +69,24 @@ export async function GET() {
   }
 }
 
+// DELETE: Selected visitors delete karna
 export async function DELETE(request: Request) {
   try {
+    // Server-side admin authentication
+    if (!verifyAdminRequest(request)) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const ids = body?.ids;
 
     if (
       !Array.isArray(ids) ||
       ids.length === 0 ||
-      !ids.every((id) => typeof id === "string")
+      !ids.every((id) => typeof id === "string" && id.length > 0)
     ) {
       return NextResponse.json(
         { error: "Valid visitor IDs are required" },

@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from "next/link";
@@ -85,10 +84,15 @@ export default function CartPage() {
   const [placing, setPlacing] = useState(false);
   const [error, setError] = useState("");
 
-  const [settings, setSettings] = useState({
+  // FREE SHIPPING SETTINGS
+  const [settings, setSettings] = useState<{
+    shippingFee: number;
+    freeShippingThreshold: number | null;
+    enableFreeShipping: boolean;
+  }>({
     shippingFee: 250,
-    freeShippingThreshold: 5000,
-    enableFreeShipping: true,
+    freeShippingThreshold: null,
+    enableFreeShipping: false,
   });
 
   // Coins
@@ -191,8 +195,13 @@ export default function CartPage() {
 
         setSettings({
           shippingFee: d.settings.shippingFee ?? 250,
-          freeShippingThreshold: d.settings.freeShippingThreshold ?? 5000,
-          enableFreeShipping: d.settings.enableFreeShipping ?? true,
+          freeShippingThreshold:
+            d.settings.freeShippingThreshold === null ||
+            d.settings.freeShippingThreshold === undefined ||
+            d.settings.freeShippingThreshold === ""
+              ? null
+              : Number(d.settings.freeShippingThreshold),
+          enableFreeShipping: d.settings.enableFreeShipping ?? false,
         });
       })
       .catch((err) => console.error("Settings fetch error:", err));
@@ -252,8 +261,11 @@ export default function CartPage() {
     };
   }, [form.email]);
 
+  // FREE SHIPPING CALCULATION
   const shipping =
     settings.enableFreeShipping &&
+    settings.freeShippingThreshold !== null &&
+    Number.isFinite(settings.freeShippingThreshold) &&
     totalPrice >= settings.freeShippingThreshold
       ? 0
       : settings.shippingFee;
@@ -530,21 +542,18 @@ export default function CartPage() {
     setReturnMessage("");
 
     try {
-      // Upload images
       const imageUrls: string[] = [];
 
       for (const file of returnImages) {
         imageUrls.push(await uploadReturnFile(file));
       }
 
-      // Upload videos
       const videoUrls: string[] = [];
 
       for (const file of returnVideos) {
         videoUrls.push(await uploadReturnFile(file));
       }
 
-      // Send uploaded URLs and customer details to return API
       const requestData = new FormData();
 
       requestData.append("orderId", returnOrder.id);
@@ -1081,15 +1090,18 @@ export default function CartPage() {
                   </strong>
                 </div>
 
-                {settings.enableFreeShipping && shipping > 0 && (
-                  <div className="free-shipping-note">
-                    Add Rs.{" "}
-                    {(
-                      settings.freeShippingThreshold - totalPrice
-                    ).toLocaleString()}{" "}
-                    more to get free shipping.
-                  </div>
-                )}
+                {settings.enableFreeShipping &&
+                  settings.freeShippingThreshold !== null &&
+                  shipping > 0 && (
+                    <div className="free-shipping-note">
+                      Add Rs.{" "}
+                      {Math.max(
+                        0,
+                        settings.freeShippingThreshold - totalPrice
+                      ).toLocaleString()}{" "}
+                      more to get free shipping.
+                    </div>
+                  )}
 
                 {(earnedCoins > 0 || referralCoins > 0) && (
                   <div className="coin-info-grid">
@@ -1214,7 +1226,6 @@ export default function CartPage() {
               </div>
             ) : (
               <>
-                {/* CUSTOMER PHONE */}
                 <label style={labelStyle}>Phone Number *</label>
 
                 <input
@@ -1234,7 +1245,6 @@ export default function CartPage() {
                   disabled={submittingReturn}
                 />
 
-                {/* CUSTOMER EMAIL */}
                 <label style={labelStyle}>Email Address</label>
 
                 <input
@@ -1253,7 +1263,6 @@ export default function CartPage() {
                   disabled={submittingReturn}
                 />
 
-                {/* CUSTOMER ADDRESS */}
                 <label style={labelStyle}>Delivery Address *</label>
 
                 <textarea
@@ -1277,7 +1286,6 @@ export default function CartPage() {
                   disabled={submittingReturn}
                 />
 
-                {/* RETURN REASON */}
                 <label style={labelStyle}>Reason for Return *</label>
 
                 <select
@@ -1297,7 +1305,6 @@ export default function CartPage() {
                   <option value="Other">Other</option>
                 </select>
 
-                {/* ADDITIONAL DETAILS */}
                 <label style={labelStyle}>Additional Details (Optional)</label>
 
                 <textarea
@@ -1314,7 +1321,6 @@ export default function CartPage() {
                   disabled={submittingReturn}
                 />
 
-                {/* IMAGE UPLOAD */}
                 <label style={labelStyle}>
                   <ImageIcon
                     size={15}
@@ -1359,7 +1365,6 @@ export default function CartPage() {
                   </div>
                 )}
 
-                {/* VIDEO UPLOAD */}
                 <label style={labelStyle}>
                   <Video
                     size={15}

@@ -1,6 +1,7 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { verifyAdminRequest } from "@/lib/admin-auth";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -20,6 +21,13 @@ export async function GET(
   { params }: RouteContext
 ) {
   try {
+    if (!verifyAdminRequest(request)) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
     const { id } = await params;
 
     if (!id) {
@@ -60,6 +68,13 @@ export async function PUT(
   { params }: RouteContext
 ) {
   try {
+    if (!verifyAdminRequest(request)) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
     const { id } = await params;
     const body = await request.json();
 
@@ -109,11 +124,9 @@ export async function PUT(
       if (shouldReward) {
         const customerId = existing.customerId!;
 
-        // Calculate reward from final payable amount
         coinsEarned =
           Math.round(existing.total * 0.03 * 100) / 100;
 
-        // Check if this is the customer's first delivered order
         const previousDeliveredOrders = await tx.order.count({
           where: {
             customerId,
@@ -122,7 +135,6 @@ export async function PUT(
           },
         });
 
-        // Give customer their order reward
         await tx.customer.update({
           where: { id: customerId },
           data: {
@@ -130,7 +142,6 @@ export async function PUT(
           },
         });
 
-        // Referral reward for first delivered order
         if (
           previousDeliveredOrders === 0 &&
           existing.customer?.referredBy
@@ -216,6 +227,13 @@ export async function DELETE(
   { params }: RouteContext
 ) {
   try {
+    if (!verifyAdminRequest(request)) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
     const { id } = await params;
 
     const existing = await prisma.order.findUnique({

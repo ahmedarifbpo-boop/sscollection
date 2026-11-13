@@ -60,7 +60,8 @@ interface Offer {
   id: string;
   title: string;
   subtitle: string | null;
-  image: string;
+  image: string | null;
+  video?: string | null;
   ctaText: string;
   ctaLink: string;
 }
@@ -299,7 +300,6 @@ export default function HomeClient({
               Shopping Cart
             </Link>
 
-            {/* HELP & SUPPORT - OPENS EXISTING TOPBAR CHAT */}
             <button
               type="button"
               onClick={openChat}
@@ -578,7 +578,6 @@ export default function HomeClient({
           color: #ff8a50;
         }
 
-        /* Help button ko footer links jaisa look */
         .footer-help-button {
           display: flex;
           align-items: center;
@@ -714,19 +713,23 @@ export default function HomeClient({
 function HeroSlider({ offers }: { offers: Offer[] }) {
   const [current, setCurrent] = useState(0);
 
-  useEffect(() => {
-    if (offers.length <= 1) return;
+  const offer = offers[current];
 
-    const timer = setInterval(() => {
+  useEffect(() => {
+    if (offers.length <= 1 || offer?.video) return;
+
+    const timer = setTimeout(() => {
       setCurrent((prev) => (prev + 1) % offers.length);
     }, 4000);
 
-    return () => clearInterval(timer);
-  }, [offers.length]);
+    return () => clearTimeout(timer);
+  }, [current, offers.length, offer?.video]);
 
   if (offers.length === 0) return null;
 
-  const offer = offers[current];
+  const nextSlide = () => {
+    setCurrent((prev) => (prev + 1) % offers.length);
+  };
 
   return (
     <section
@@ -736,21 +739,90 @@ function HeroSlider({ offers }: { offers: Offer[] }) {
         overflow: "hidden",
         marginBottom: "28px",
         borderRadius: "14px",
+        background: "#f5f5f5",
       }}
     >
-      {offer.image && (
+      {offer.video ? (
+        <video
+          key={offer.id}
+          src={offer.video}
+          autoPlay
+          muted
+          playsInline
+          preload="metadata"
+          onEnded={nextSlide}
+          style={{
+            width: "100%",
+            height: "auto",
+            aspectRatio: "1200 / 400",
+            objectFit: "cover",
+            display: "block",
+          }}
+        />
+      ) : offer.image ? (
         <Image
+          key={offer.id}
           src={offer.image}
           alt={offer.title || "S.S Collection promotion"}
           width={1200}
           height={400}
-          priority
+          priority={current === 0}
+          sizes="100vw"
           style={{
             width: "100%",
             height: "auto",
             display: "block",
           }}
         />
+      ) : (
+        <div
+          style={{
+            width: "100%",
+            aspectRatio: "1200 / 400",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          Banner media unavailable
+        </div>
+      )}
+
+      {offers.length > 1 && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: "12px",
+            left: 0,
+            right: 0,
+            display: "flex",
+            justifyContent: "center",
+            gap: "7px",
+            zIndex: 5,
+          }}
+        >
+          {offers.map((item, index) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setCurrent(index)}
+              aria-label={`Go to banner ${index + 1}`}
+              style={{
+                width: current === index ? "22px" : "7px",
+                height: "7px",
+                padding: 0,
+                border: "none",
+                borderRadius: "10px",
+                background:
+                  current === index
+                    ? "#fff"
+                    : "rgba(255,255,255,0.65)",
+                cursor: "pointer",
+                transition: "0.2s",
+              }}
+            />
+          ))}
+        </div>
       )}
     </section>
   );

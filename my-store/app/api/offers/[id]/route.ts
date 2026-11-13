@@ -1,23 +1,44 @@
+
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { verifyAdminRequest } from "@/lib/admin-auth";
 
-// DELETE /api/offers/[id]
+// DELETE /api/offers/[id] - Admin only
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
+    const adminId = verifyAdminRequest(request);
 
-    const existing = await prisma.offer.findUnique({ where: { id } });
-    if (!existing) {
-      return NextResponse.json({ error: "Offer not found" }, { status: 404 });
+    if (!adminId) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
     }
 
-    await prisma.offer.delete({ where: { id } });
+    const { id } = await params;
+
+    const existing = await prisma.offer.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      return NextResponse.json(
+        { error: "Offer not found" },
+        { status: 404 }
+      );
+    }
+
+    await prisma.offer.delete({
+      where: { id },
+    });
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("DELETE /api/offers/[id] error:", error);
+
     return NextResponse.json(
       { error: "Failed to delete offer" },
       { status: 500 }

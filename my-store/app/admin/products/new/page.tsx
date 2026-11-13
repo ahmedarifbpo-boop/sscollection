@@ -46,22 +46,49 @@ export default function AddProductPage() {
   const [images, setImages] = useState<string[]>([]);
   const [video, setVideo] = useState("");
 
+  // Verify admin session and load categories
   useEffect(() => {
-    const admin = localStorage.getItem("ss-admin");
-
-    if (!admin) {
-      router.push("/admin/login");
-      return;
-    }
+    let active = true;
 
     async function fetchCats() {
       try {
-        const res = await fetch("/api/categories");
+        const sessionRes = await fetch("/api/admin/session", {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        });
+
+        if (!sessionRes.ok) {
+          router.replace("/admin/login");
+          return;
+        }
+
+        const sessionData = await sessionRes.json();
+
+        if (!sessionData.authenticated) {
+          router.replace("/admin/login");
+          return;
+        }
+
+        const res = await fetch("/api/categories", {
+          credentials: "include",
+          cache: "no-store",
+        });
+
+        if (res.status === 401) {
+          router.replace("/admin/login");
+          return;
+        }
+
         const data = await res.json();
 
         if (!res.ok) {
-          throw new Error(data.error || "Categories load nahi ho sakin");
+          throw new Error(
+            data.error || "Categories load nahi ho sakin"
+          );
         }
+
+        if (!active) return;
 
         const categoryList = data.categories || [];
         setCategories(categoryList);
@@ -75,11 +102,17 @@ export default function AddProductPage() {
       } catch (err) {
         console.error("Failed to fetch categories:", err);
       } finally {
-        setReady(true);
+        if (active) {
+          setReady(true);
+        }
       }
     }
 
     fetchCats();
+
+    return () => {
+      active = false;
+    };
   }, [router]);
 
   const update = (key: string, value: string) => {
@@ -115,13 +148,21 @@ export default function AddProductPage() {
 
         const res = await fetch("/api/upload", {
           method: "POST",
+          credentials: "include",
           body: formData,
         });
 
         const data = await res.json();
 
+        if (res.status === 401) {
+          router.replace("/admin/login");
+          return;
+        }
+
         if (!res.ok) {
-          throw new Error(data.error || `${file.name} upload nahi hui`);
+          throw new Error(
+            data.error || `${file.name} upload nahi hui`
+          );
         }
 
         if (!data.url) {
@@ -139,7 +180,9 @@ export default function AddProductPage() {
       setError(message);
 
       if (uploadedCount > 0) {
-        setUploadMessage(`${uploadedCount} image(s) successfully uploaded`);
+        setUploadMessage(
+          `${uploadedCount} image(s) successfully uploaded`
+        );
       }
     } finally {
       setUploadingImages(false);
@@ -175,10 +218,16 @@ export default function AddProductPage() {
 
       const res = await fetch("/api/upload", {
         method: "POST",
+        credentials: "include",
         body: formData,
       });
 
       const data = await res.json();
+
+      if (res.status === 401) {
+        router.replace("/admin/login");
+        return;
+      }
 
       if (!res.ok) {
         throw new Error(data.error || "Video upload failed");
@@ -232,10 +281,7 @@ export default function AddProductPage() {
       return;
     }
 
-    if (
-      form.salePrice &&
-      Number(form.salePrice) < 0
-    ) {
+    if (form.salePrice && Number(form.salePrice) < 0) {
       setError("Sale price valid enter karo");
       return;
     }
@@ -263,6 +309,7 @@ export default function AddProductPage() {
     try {
       const res = await fetch("/api/products", {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
         },
@@ -283,8 +330,15 @@ export default function AddProductPage() {
 
       const data = await res.json();
 
+      if (res.status === 401) {
+        router.replace("/admin/login");
+        return;
+      }
+
       if (!res.ok) {
-        throw new Error(data.error || "Product create nahi ho saka");
+        throw new Error(
+          data.error || "Product create nahi ho saka"
+        );
       }
 
       router.push("/admin/products");

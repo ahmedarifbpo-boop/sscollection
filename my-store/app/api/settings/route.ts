@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { verifyAdminRequest } from "@/lib/admin-auth";
 
-// GET: Settings lana
+
+// GET: Settings lana (Public)
 export async function GET() {
   try {
     let settings = await prisma.settings.findFirst();
-    
-    // Agar pehli baar khula hai, to default settings bana do
+
     if (!settings) {
       settings = await prisma.settings.create({
         data: {
@@ -14,53 +15,99 @@ export async function GET() {
           contactEmail: "contact@sscollection.pk",
           contactPhone: "+92 300 0000000",
           address: "Karachi, Pakistan",
-          freeShippingThreshold: 5000,
+
+          // Free Shipping default OFF
+          freeShippingThreshold: null,
           shippingFee: 250,
-          enableFreeShipping: true,
-          logoUrl: "", // Default khali
+          enableFreeShipping: false,
+
+          logoUrl: "",
+          adsenseCode: "",
+          adsenseEnabled: false,
         },
       });
     }
 
-    // Cache bypass headers taake har baar naya data aaye
-    return NextResponse.json({ settings }, {
-      headers: {
-        'Cache-Control': 'no-store, max-age=0',
-      },
-    });
+    return NextResponse.json(
+      { settings },
+      {
+        headers: {
+          "Cache-Control": "no-store, max-age=0",
+        },
+      }
+    );
   } catch (error) {
     console.error("GET settings error:", error);
-    return NextResponse.json({ error: "Failed to fetch settings" }, { status: 500 });
+
+    return NextResponse.json(
+      { error: "Failed to fetch settings" },
+      { status: 500 }
+    );
   }
 }
 
-// POST: Settings save karna (Logo, Shipping, Name waghera)
+// POST: Settings save karna (Admin Only)
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    
-    // Sirf allowed fields ko database mein update karne ke liye pick karo
-    const { 
-      storeName, 
-      contactEmail, 
-      contactPhone, 
-      address, 
-      freeShippingThreshold, 
-      shippingFee, 
-      enableFreeShipping,
-      logoUrl 
-    } = body;
+    if (!verifyAdminRequest(request)) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
 
-    const dataToUpdate = {
-      storeName,
-      contactEmail,
-      contactPhone,
-      address,
-      freeShippingThreshold: Number(freeShippingThreshold),
-      shippingFee: Number(shippingFee),
-      enableFreeShipping: Boolean(enableFreeShipping),
-      logoUrl, // 👈 Logo URL save hoga
-    };
+    const body = await request.json();
+
+    // Sirf wohi fields update hongi jo request mein bheji gayi hain.
+    const dataToUpdate: Record<string, any> = {};
+
+    if (body.storeName !== undefined)
+      dataToUpdate.storeName = body.storeName;
+
+    if (body.contactEmail !== undefined)
+      dataToUpdate.contactEmail = body.contactEmail;
+
+    if (body.contactPhone !== undefined)
+      dataToUpdate.contactPhone = body.contactPhone;
+
+    if (body.address !== undefined)
+      dataToUpdate.address = body.address;
+
+    if (body.freeShippingThreshold !== undefined) {
+      const value = Number(body.freeShippingThreshold);
+      if (!Number.isFinite(value)) {
+        return NextResponse.json(
+          { error: "Invalid free shipping threshold" },
+          { status: 400 }
+        );
+      }
+      dataToUpdate.freeShippingThreshold = value;
+    }
+
+    if (body.shippingFee !== undefined) {
+      const value = Number(body.shippingFee);
+      if (!Number.isFinite(value)) {
+        return NextResponse.json(
+          { error: "Invalid shipping fee" },
+          { status: 400 }
+        );
+      }
+      dataToUpdate.shippingFee = value;
+    }
+
+    if (body.enableFreeShipping !== undefined)
+      dataToUpdate.enableFreeShipping = Boolean(body.enableFreeShipping);
+
+    if (body.logoUrl !== undefined)
+      dataToUpdate.logoUrl = body.logoUrl;
+
+    if (body.adsenseCode !== undefined) {
+      dataToUpdate.adsenseCode =
+        String(body.adsenseCode).trim() || null;
+    }
+
+    if (body.adsenseEnabled !== undefined)
+      dataToUpdate.adsenseEnabled = Boolean(body.adsenseEnabled);
 
     const existing = await prisma.settings.findFirst();
 
@@ -70,12 +117,18 @@ export async function POST(request: Request) {
         data: dataToUpdate,
       });
     } else {
-      await prisma.settings.create({ data: dataToUpdate });
+      await prisma.settings.create({
+        data: dataToUpdate,
+      });
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("POST settings error:", error);
-    return NextResponse.json({ error: "Failed to save settings" }, { status: 500 });
+
+    return NextResponse.json(
+      { error: "Failed to save settings" },
+      { status: 500 }
+    );
   }
 }

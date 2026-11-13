@@ -47,13 +47,21 @@ export default function AdminVisitorsPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
+  // Visitors load karna - server-side authentication
   const loadVisitors = useCallback(async () => {
     try {
       setErrorMsg("");
 
       const response = await fetch("/api/admin/visitors", {
+        method: "GET",
+        credentials: "include",
         cache: "no-store",
       });
+
+      if (response.status === 401) {
+        router.replace("/admin/login");
+        return;
+      }
 
       const data = await response.json();
 
@@ -64,24 +72,19 @@ export default function AdminVisitorsPage() {
       setVisitors(data.visitors || []);
     } catch (error) {
       console.error(error);
+
       setErrorMsg(
         error instanceof Error ? error.message : "Failed to load visitors"
       );
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [router]);
 
+  // Page open hone par API authentication check hogi
   useEffect(() => {
-    const admin = localStorage.getItem("ss-admin");
-
-    if (!admin) {
-      router.push("/admin/login");
-      return;
-    }
-
     loadVisitors();
-  }, [router, loadVisitors]);
+  }, [loadVisitors]);
 
   const toggleSelect = (id: string) => {
     setSelected((previous) =>
@@ -99,6 +102,7 @@ export default function AdminVisitorsPage() {
     }
   };
 
+  // Selected visitors delete karna
   const handleDelete = async () => {
     if (selected.length === 0 || deleting) return;
 
@@ -113,11 +117,17 @@ export default function AdminVisitorsPage() {
     try {
       const response = await fetch("/api/admin/visitors", {
         method: "DELETE",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ ids: selected }),
       });
+
+      if (response.status === 401) {
+        router.replace("/admin/login");
+        return;
+      }
 
       const data = await response.json();
 
@@ -130,8 +140,12 @@ export default function AdminVisitorsPage() {
       );
 
       setSelected([]);
-      setSuccessMsg(`${data.deletedCount ?? selected.length} records deleted.`);
+      setSuccessMsg(
+        `${data.deletedCount ?? selected.length} records deleted.`
+      );
     } catch (error) {
+      console.error(error);
+
       setErrorMsg(
         error instanceof Error ? error.message : "Failed to delete records"
       );
@@ -181,7 +195,10 @@ export default function AdminVisitorsPage() {
       return { background: "#EDE9FE", color: "#5B21B6" };
     }
 
-    return { background: "var(--bg-alt)", color: "var(--text-secondary)" };
+    return {
+      background: "var(--bg-alt)",
+      color: "var(--text-secondary)",
+    };
   };
 
   if (loading) {
@@ -321,11 +338,7 @@ export default function AdminVisitorsPage() {
             fontSize: "13px",
           }}
         >
-          {allSelected ? (
-            <CheckSquare size={18} />
-          ) : (
-            <Square size={18} />
-          )}
+          {allSelected ? <CheckSquare size={18} /> : <Square size={18} />}
           Select all
         </button>
 
@@ -351,12 +364,14 @@ export default function AdminVisitorsPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 320px), 1fr))",
+            gridTemplateColumns:
+              "repeat(auto-fill, minmax(min(100%, 320px), 1fr))",
             gap: "14px",
           }}
         >
           {visitors.map((visitor) => {
             const colors = eventColors(visitor.eventType);
+            const isSelected = selected.includes(visitor.id);
 
             return (
               <div
@@ -365,10 +380,9 @@ export default function AdminVisitorsPage() {
                 style={{
                   padding: "15px",
                   minWidth: 0,
-                  border:
-                    selected.includes(visitor.id)
-                      ? "1px solid var(--accent)"
-                      : "1px solid var(--border)",
+                  border: isSelected
+                    ? "1px solid var(--accent)"
+                    : "1px solid var(--border)",
                 }}
               >
                 {/* CARD TOP */}
@@ -415,13 +429,13 @@ export default function AdminVisitorsPage() {
                       border: "none",
                       background: "transparent",
                       cursor: "pointer",
-                      color: selected.includes(visitor.id)
+                      color: isSelected
                         ? "var(--accent)"
                         : "var(--text-muted)",
                       padding: "2px",
                     }}
                   >
-                    {selected.includes(visitor.id) ? (
+                    {isSelected ? (
                       <CheckSquare size={20} />
                     ) : (
                       <Square size={20} />

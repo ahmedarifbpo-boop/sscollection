@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -15,7 +16,7 @@ export default function EditProductPage() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
-  const [categories, setCategories] = useState<{id: string, name: string}[]>([]);
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
 
   const [form, setForm] = useState({
     name: "",
@@ -27,34 +28,69 @@ export default function EditProductPage() {
     image: "",
   });
 
-  // Load product + categories
+  // Load product + categories after admin session verification
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const admin = localStorage.getItem("ss-admin");
-    if (!admin) {
-      router.push("/admin/login");
-      return;
-    }
+    let active = true;
 
     async function fetchData() {
       try {
+        const sessionRes = await fetch("/api/admin/session", {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        });
+
+        if (!sessionRes.ok) {
+          router.replace("/admin/login");
+          return;
+        }
+
+        const sessionData = await sessionRes.json();
+
+        if (!sessionData.authenticated) {
+          router.replace("/admin/login");
+          return;
+        }
+
         const [prodRes, catRes] = await Promise.all([
-          fetch(`/api/products/${id}`),
-          fetch("/api/categories")
+          fetch(`/api/products/${id}`, {
+            credentials: "include",
+            cache: "no-store",
+          }),
+          fetch("/api/categories", {
+            credentials: "include",
+            cache: "no-store",
+          }),
         ]);
-        
+
+        if (!active) return;
+
+        if (prodRes.status === 401 || catRes.status === 401) {
+          router.replace("/admin/login");
+          return;
+        }
+
         if (prodRes.status === 404) {
           setError("Product not found");
-          setLoading(false);
           return;
+        }
+
+        if (!prodRes.ok || !catRes.ok) {
+          throw new Error("Failed to load product data");
         }
 
         const prodData = await prodRes.json();
         const catData = await catRes.json();
-        
+
         setCategories(catData.categories || []);
-        
+
         const p = prodData.product;
+
+        if (!p) {
+          setError("Product not found");
+          return;
+        }
+
         setForm({
           name: p.name,
           description: p.description,
@@ -65,17 +101,28 @@ export default function EditProductPage() {
           image: p.image,
         });
       } catch (e) {
-        setError("Failed to load product");
+        if (active) {
+          setError("Failed to load product");
+        }
       } finally {
-        setLoading(false);
-        setReady(true);
+        if (active) {
+          setLoading(false);
+          setReady(true);
+        }
       }
     }
+
     fetchData();
+
+    return () => {
+      active = false;
+    };
   }, [id, router]);
 
   // Image Upload Function
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -88,23 +135,34 @@ export default function EditProductPage() {
 
       const res = await fetch("/api/upload", {
         method: "POST",
+        credentials: "include",
         body: formData,
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Upload failed");
+
+      if (res.status === 401) {
+        router.replace("/admin/login");
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error(data.error || "Upload failed");
+      }
 
       setForm((prev) => ({ ...prev, image: data.url }));
     } catch (err: any) {
       setError("Image upload failed: " + err.message);
     } finally {
       setUploading(false);
+      e.target.value = "";
     }
   };
 
   // Save Changes
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     if (!form.image) {
       setError("Please upload an image first");
       return;
@@ -116,6 +174,7 @@ export default function EditProductPage() {
     try {
       const res = await fetch(`/api/products/${id}`, {
         method: "PUT",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: form.name,
@@ -129,7 +188,15 @@ export default function EditProductPage() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to update product");
+
+      if (res.status === 401) {
+        router.replace("/admin/login");
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to update product");
+      }
 
       router.push("/admin/products");
     } catch (err: any) {
@@ -138,17 +205,40 @@ export default function EditProductPage() {
     }
   };
 
-  const update = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
+  const update = (k: string, v: string) =>
+    setForm((p) => ({ ...p, [k]: v }));
 
   if (!ready || loading) {
-    return <div style={{ padding: "60px 24px", textAlign: "center", color: "var(--text-muted)" }}>Loading...</div>;
+    return (
+      <div
+        style={{
+          padding: "60px 24px",
+          textAlign: "center",
+          color: "var(--text-muted)",
+        }}
+      >
+        Loading...
+      </div>
+    );
   }
 
   if (error === "Product not found") {
     return (
       <div style={{ padding: "60px 24px", textAlign: "center" }}>
-        <h1 style={{ fontSize: "20px", color: "var(--text-primary)", marginBottom: "12px" }}>Product not found</h1>
-        <Link href="/admin/products" className="dz-btn-primary" style={{ display: "inline-block", textDecoration: "none" }}>
+        <h1
+          style={{
+            fontSize: "20px",
+            color: "var(--text-primary)",
+            marginBottom: "12px",
+          }}
+        >
+          Product not found
+        </h1>
+        <Link
+          href="/admin/products"
+          className="dz-btn-primary"
+          style={{ display: "inline-block", textDecoration: "none" }}
+        >
           Back to Products
         </Link>
       </div>
@@ -157,73 +247,291 @@ export default function EditProductPage() {
 
   return (
     <div>
-      <Link href="/admin/products" style={{ display: "inline-flex", alignItems: "center", gap: "6px", color: "var(--text-secondary)", fontSize: "13px", marginBottom: "20px", textDecoration: "none" }}>
+      <Link
+        href="/admin/products"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "6px",
+          color: "var(--text-secondary)",
+          fontSize: "13px",
+          marginBottom: "20px",
+          textDecoration: "none",
+        }}
+      >
         <ArrowLeft size={16} />
         Back to Products
       </Link>
 
-      <h1 style={{ fontSize: "22px", fontWeight: "500", color: "var(--text-primary)", marginBottom: "24px" }}>
+      <h1
+        style={{
+          fontSize: "22px",
+          fontWeight: "500",
+          color: "var(--text-primary)",
+          marginBottom: "24px",
+        }}
+      >
         Edit Product
       </h1>
 
-      <form onSubmit={handleSubmit} className="dz-card" style={{ padding: "24px", maxWidth: "800px" }}>
+      <form
+        onSubmit={handleSubmit}
+        className="dz-card"
+        style={{ padding: "24px", maxWidth: "800px" }}
+      >
         {error && (
-          <div style={{ background: "#FEE", color: "#E74C3C", padding: "12px", borderRadius: "3px", marginBottom: "16px", fontSize: "13px" }}>
+          <div
+            style={{
+              background: "#FEE",
+              color: "#E74C3C",
+              padding: "12px",
+              borderRadius: "3px",
+              marginBottom: "16px",
+              fontSize: "13px",
+            }}
+          >
             {error}
           </div>
         )}
 
         <div style={{ marginBottom: "16px" }}>
-          <label style={{ display: "block", fontSize: "12px", fontWeight: "500", color: "var(--text-secondary)", marginBottom: "6px" }}>Product Name *</label>
-          <input type="text" required value={form.name} onChange={(e) => update("name", e.target.value)} className="dz-input" />
+          <label
+            style={{
+              display: "block",
+              fontSize: "12px",
+              fontWeight: "500",
+              color: "var(--text-secondary)",
+              marginBottom: "6px",
+            }}
+          >
+            Product Name *
+          </label>
+          <input
+            type="text"
+            required
+            value={form.name}
+            onChange={(e) => update("name", e.target.value)}
+            className="dz-input"
+          />
         </div>
 
         <div style={{ marginBottom: "16px" }}>
-          <label style={{ display: "block", fontSize: "12px", fontWeight: "500", color: "var(--text-secondary)", marginBottom: "6px" }}>Description *</label>
-          <textarea required rows={4} value={form.description} onChange={(e) => update("description", e.target.value)} className="dz-input" style={{ resize: "none" }} />
+          <label
+            style={{
+              display: "block",
+              fontSize: "12px",
+              fontWeight: "500",
+              color: "var(--text-secondary)",
+              marginBottom: "6px",
+            }}
+          >
+            Description *
+          </label>
+          <textarea
+            required
+            rows={4}
+            value={form.description}
+            onChange={(e) => update("description", e.target.value)}
+            className="dz-input"
+            style={{ resize: "none" }}
+          />
         </div>
 
         <div style={{ marginBottom: "16px" }}>
-          <label style={{ display: "block", fontSize: "12px", fontWeight: "500", color: "var(--text-secondary)", marginBottom: "6px" }}>Category *</label>
-          <select required value={form.category} onChange={(e) => update("category", e.target.value)} className="dz-input">
-            {categories.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+          <label
+            style={{
+              display: "block",
+              fontSize: "12px",
+              fontWeight: "500",
+              color: "var(--text-secondary)",
+              marginBottom: "6px",
+            }}
+          >
+            Category *
+          </label>
+          <select
+            required
+            value={form.category}
+            onChange={(e) => update("category", e.target.value)}
+            className="dz-input"
+          >
+            {categories.map((c) => (
+              <option key={c.id} value={c.name}>
+                {c.name}
+              </option>
+            ))}
           </select>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "16px",
+            marginBottom: "16px",
+          }}
+        >
           <div>
-            <label style={{ display: "block", fontSize: "12px", fontWeight: "500", color: "var(--text-secondary)", marginBottom: "6px" }}>Price (Rs.) *</label>
-            <input type="number" required value={form.price} onChange={(e) => update("price", e.target.value)} className="dz-input" />
+            <label
+              style={{
+                display: "block",
+                fontSize: "12px",
+                fontWeight: "500",
+                color: "var(--text-secondary)",
+                marginBottom: "6px",
+              }}
+            >
+              Price (Rs.) *
+            </label>
+            <input
+              type="number"
+              required
+              value={form.price}
+              onChange={(e) => update("price", e.target.value)}
+              className="dz-input"
+            />
           </div>
+
           <div>
-            <label style={{ display: "block", fontSize: "12px", fontWeight: "500", color: "var(--text-secondary)", marginBottom: "6px" }}>Sale Price (optional)</label>
-            <input type="number" value={form.salePrice} onChange={(e) => update("salePrice", e.target.value)} className="dz-input" />
+            <label
+              style={{
+                display: "block",
+                fontSize: "12px",
+                fontWeight: "500",
+                color: "var(--text-secondary)",
+                marginBottom: "6px",
+              }}
+            >
+              Sale Price (optional)
+            </label>
+            <input
+              type="number"
+              value={form.salePrice}
+              onChange={(e) => update("salePrice", e.target.value)}
+              className="dz-input"
+            />
           </div>
         </div>
 
         <div style={{ marginBottom: "16px" }}>
-          <label style={{ display: "block", fontSize: "12px", fontWeight: "500", color: "var(--text-secondary)", marginBottom: "6px" }}>Stock Quantity *</label>
-          <input type="number" required value={form.stock} onChange={(e) => update("stock", e.target.value)} className="dz-input" />
+          <label
+            style={{
+              display: "block",
+              fontSize: "12px",
+              fontWeight: "500",
+              color: "var(--text-secondary)",
+              marginBottom: "6px",
+            }}
+          >
+            Stock Quantity *
+          </label>
+          <input
+            type="number"
+            required
+            value={form.stock}
+            onChange={(e) => update("stock", e.target.value)}
+            className="dz-input"
+          />
         </div>
 
         {/* IMAGE UPLOAD SECTION */}
         <div style={{ marginBottom: "24px" }}>
-          <label style={{ display: "block", fontSize: "12px", fontWeight: "500", color: "var(--text-secondary)", marginBottom: "6px" }}>Product Image *</label>
-          
+          <label
+            style={{
+              display: "block",
+              fontSize: "12px",
+              fontWeight: "500",
+              color: "var(--text-secondary)",
+              marginBottom: "6px",
+            }}
+          >
+            Product Image *
+          </label>
+
           {form.image ? (
-            <div style={{ display: "flex", alignItems: "center", gap: "16px", padding: "12px", border: "1px solid var(--border)", borderRadius: "3px", background: "var(--bg-alt)" }}>
-              <img src={form.image} alt="Preview" style={{ width: "80px", height: "80px", objectFit: "cover", borderRadius: "3px" }} />
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "16px",
+                padding: "12px",
+                border: "1px solid var(--border)",
+                borderRadius: "3px",
+                background: "var(--bg-alt)",
+              }}
+            >
+              <img
+                src={form.image}
+                alt="Preview"
+                style={{
+                  width: "80px",
+                  height: "80px",
+                  objectFit: "cover",
+                  borderRadius: "3px",
+                }}
+              />
+
               <div>
-                <p style={{ fontSize: "13px", color: "#10B981", fontWeight: "500", marginBottom: "8px" }}>✓ Image Uploaded</p>
-                <button type="button" onClick={() => setForm(p => ({ ...p, image: "" }))} style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", color: "#E74C3C", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                <p
+                  style={{
+                    fontSize: "13px",
+                    color: "#10B981",
+                    fontWeight: "500",
+                    marginBottom: "8px",
+                  }}
+                >
+                  ✓ Image Uploaded
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setForm((p) => ({ ...p, image: "" }))
+                  }
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    fontSize: "12px",
+                    color: "#E74C3C",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: 0,
+                  }}
+                >
                   <X size={14} /> Change Image
                 </button>
               </div>
             </div>
           ) : (
-            <div style={{ border: "2px dashed var(--border-strong)", borderRadius: "3px", padding: "32px", textAlign: "center", background: "var(--bg-alt)" }}>
-              <Upload size={32} style={{ color: "var(--text-muted)", marginBottom: "12px" }} />
-              <p style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "16px" }}>Click to upload product image</p>
+            <div
+              style={{
+                border: "2px dashed var(--border-strong)",
+                borderRadius: "3px",
+                padding: "32px",
+                textAlign: "center",
+                background: "var(--bg-alt)",
+              }}
+            >
+              <Upload
+                size={32}
+                style={{
+                  color: "var(--text-muted)",
+                  marginBottom: "12px",
+                }}
+              />
+
+              <p
+                style={{
+                  fontSize: "13px",
+                  color: "var(--text-secondary)",
+                  marginBottom: "16px",
+                }}
+              >
+                Click to upload product image
+              </p>
+
               <input
                 type="file"
                 accept="image/*"
@@ -232,14 +540,44 @@ export default function EditProductPage() {
                 style={{ display: "none" }}
                 id="image-upload-edit"
               />
-              <label htmlFor="image-upload-edit" className="dz-btn-primary" style={{ display: "inline-flex", alignItems: "center", gap: "8px", cursor: uploading ? "wait" : "pointer" }}>
-                {uploading ? <><Loader2 size={16} className="animate-spin" /> Uploading...</> : <><Upload size={16} /> Choose Image</>}
+
+              <label
+                htmlFor="image-upload-edit"
+                className="dz-btn-primary"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  cursor: uploading ? "wait" : "pointer",
+                }}
+              >
+                {uploading ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Upload size={16} />
+                    Choose Image
+                  </>
+                )}
               </label>
             </div>
           )}
         </div>
 
-        <button type="submit" disabled={saving || uploading} className="dz-btn-primary" style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "12px 24px" }}>
+        <button
+          type="submit"
+          disabled={saving || uploading}
+          className="dz-btn-primary"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "12px 24px",
+          }}
+        >
           <Save size={16} />
           {saving ? "Updating..." : "Update Product"}
         </button>

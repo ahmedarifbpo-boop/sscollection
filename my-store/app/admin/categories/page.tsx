@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -13,6 +14,7 @@ interface Category {
 
 export default function AdminCategoriesPage() {
   const router = useRouter();
+
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -20,37 +22,74 @@ export default function AdminCategoriesPage() {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // Check admin session using HTTP-only cookie
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const admin = localStorage.getItem("ss-admin");
-    if (!admin) {
-      router.push("/admin/login");
-      return;
-    }
-    setReady(true);
+    let active = true;
+
+    const checkSession = async () => {
+      try {
+        const res = await fetch("/api/admin/session", {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.authenticated) {
+          router.replace("/admin/login");
+          return;
+        }
+
+        if (active) {
+          setReady(true);
+        }
+      } catch (error) {
+        console.error("Admin session check failed:", error);
+        router.replace("/admin/login");
+      }
+    };
+
+    checkSession();
+
+    return () => {
+      active = false;
+    };
   }, [router]);
 
+  // Fetch categories after authentication
   useEffect(() => {
     if (!ready) return;
+
     fetchCategories();
   }, [ready]);
 
   const fetchCategories = async () => {
     try {
-      const res = await fetch("/api/categories");
+      const res = await fetch("/api/categories", {
+        cache: "no-store",
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to fetch categories");
+      }
+
       const data = await res.json();
       setCategories(data.categories || []);
-    } catch (e) {
-      console.error("Failed to fetch categories:", e);
+    } catch (error) {
+      console.error("Failed to fetch categories:", error);
     } finally {
       setLoading(false);
     }
   };
 
+  // Add category
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
     const name = newCat.trim();
+
     if (!name) return;
 
     setSaving(true);
@@ -58,105 +97,226 @@ export default function AdminCategoriesPage() {
     try {
       const res = await fetch("/api/categories", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ name }),
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to add category");
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to add category");
+      }
 
       setNewCat("");
       await fetchCategories();
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || "Something went wrong");
     } finally {
       setSaving(false);
     }
   };
 
+  // Delete category
   const handleDelete = async (id: string, name: string) => {
-    if (!window.confirm(`Delete category "${name}"? Ye database se permanently delete ho jayegi.`)) return;
+    if (
+      !window.confirm(
+        `Delete category "${name}"? Ye database se permanently delete ho jayegi.`
+      )
+    ) {
+      return;
+    }
 
     try {
       const res = await fetch(`/api/categories/${id}`, {
         method: "DELETE",
       });
 
-      if (!res.ok) throw new Error("Failed to delete");
+      if (!res.ok) {
+        throw new Error("Failed to delete");
+      }
 
       setCategories((prev) => prev.filter((c) => c.id !== id));
-    } catch (e) {
+    } catch (error) {
+      console.error("Failed to delete category:", error);
       alert("Failed to delete category. Make sure the API route exists.");
     }
   };
 
   if (!ready) {
-    return <div style={{ padding: "60px 24px", textAlign: "center", color: "var(--text-muted)" }}>Loading...</div>;
+    return (
+      <div
+        style={{
+          padding: "60px 24px",
+          textAlign: "center",
+          color: "var(--text-muted)",
+        }}
+      >
+        Loading...
+      </div>
+    );
   }
 
   return (
     <div className="admin-page-container">
       {/* HEADER */}
       <div style={{ marginBottom: "24px" }}>
-        <h1 style={{ fontSize: "24px", fontWeight: "700", color: "var(--text-primary)", marginBottom: "6px", letterSpacing: "-0.5px" }}>
+        <h1
+          style={{
+            fontSize: "24px",
+            fontWeight: "700",
+            color: "var(--text-primary)",
+            marginBottom: "6px",
+            letterSpacing: "-0.5px",
+          }}
+        >
           Manage Categories
         </h1>
-        <p style={{ fontSize: "14px", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "6px" }}>
-          <Layers size={16} /> {categories.length} categories in your store
+
+        <p
+          style={{
+            fontSize: "14px",
+            color: "var(--text-muted)",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+          }}
+        >
+          <Layers size={16} />
+          {categories.length} categories in your store
         </p>
       </div>
 
-      {/* ADD NEW CATEGORY FORM (Glassy Premium) */}
-      <form onSubmit={handleAdd} className="admin-card" style={{ marginBottom: "24px" }}>
-        <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center" }}>
+      {/* ADD NEW CATEGORY FORM */}
+      <form
+        onSubmit={handleAdd}
+        className="admin-card"
+        style={{ marginBottom: "24px" }}
+      >
+        <div
+          style={{
+            display: "flex",
+            gap: "12px",
+            flexWrap: "wrap",
+            alignItems: "center",
+          }}
+        >
           <input
             type="text"
             value={newCat}
             onChange={(e) => setNewCat(e.target.value)}
             placeholder="e.g. Winter Collection, New Arrivals..."
             className="admin-input"
-            style={{ flex: "1 1 250px", width: "100%" }}
+            style={{
+              flex: "1 1 250px",
+              width: "100%",
+            }}
           />
+
           <button
             type="submit"
             disabled={saving || !newCat.trim()}
             className="dz-btn-primary"
-            style={{ 
-              display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "8px", 
-              whiteSpace: "nowrap", flex: "0 0 auto", height: "42px", padding: "0 24px" 
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px",
+              whiteSpace: "nowrap",
+              flex: "0 0 auto",
+              height: "42px",
+              padding: "0 24px",
             }}
           >
             <Plus size={18} />
             {saving ? "Adding..." : "Add Category"}
           </button>
         </div>
+
         {error && (
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "12px", color: "#E74C3C", fontSize: "13px", background: "rgba(231, 76, 60, 0.1)", padding: "8px 12px", borderRadius: "6px" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              marginTop: "12px",
+              color: "#E74C3C",
+              fontSize: "13px",
+              background: "rgba(231, 76, 60, 0.1)",
+              padding: "8px 12px",
+              borderRadius: "6px",
+            }}
+          >
             <AlertCircle size={16} />
             {error}
           </div>
         )}
       </form>
 
-      {/* LIST SECTION */}
+      {/* CATEGORY LIST */}
       {loading ? (
-        <div className="admin-card" style={{ padding: "40px 24px", textAlign: "center", color: "var(--text-muted)" }}>
+        <div
+          className="admin-card"
+          style={{
+            padding: "40px 24px",
+            textAlign: "center",
+            color: "var(--text-muted)",
+          }}
+        >
           Loading categories...
         </div>
       ) : categories.length === 0 ? (
-        <div className="admin-card" style={{ padding: "60px 24px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
-          <div style={{ background: "rgba(248, 86, 6, 0.1)", padding: "16px", borderRadius: "50%", marginBottom: "16px", color: "var(--accent)" }}>
+        <div
+          className="admin-card"
+          style={{
+            padding: "60px 24px",
+            textAlign: "center",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+          }}
+        >
+          <div
+            style={{
+              background: "rgba(248, 86, 6, 0.1)",
+              padding: "16px",
+              borderRadius: "50%",
+              marginBottom: "16px",
+              color: "var(--accent)",
+            }}
+          >
             <Tag size={32} />
           </div>
-          <h2 style={{ fontSize: "18px", fontWeight: "600", color: "var(--text-primary)", marginBottom: "8px" }}>
+
+          <h2
+            style={{
+              fontSize: "18px",
+              fontWeight: "600",
+              color: "var(--text-primary)",
+              marginBottom: "8px",
+            }}
+          >
             No categories yet
           </h2>
-          <p style={{ fontSize: "14px", color: "var(--text-muted)" }}>
+
+          <p
+            style={{
+              fontSize: "14px",
+              color: "var(--text-muted)",
+            }}
+          >
             Add your first category above to get started.
           </p>
         </div>
       ) : (
-        <div className="admin-card" style={{ padding: 0, overflow: "hidden" }}>
+        <div
+          className="admin-card"
+          style={{
+            padding: 0,
+            overflow: "hidden",
+          }}
+        >
           {categories.map((c, idx) => (
             <div
               key={c.id}
@@ -166,11 +326,20 @@ export default function AdminCategoriesPage() {
                 alignItems: "center",
                 justifyContent: "space-between",
                 padding: "16px 20px",
-                borderBottom: idx < categories.length - 1 ? "1px solid rgba(0,0,0,0.05)" : "none",
+                borderBottom:
+                  idx < categories.length - 1
+                    ? "1px solid rgba(0,0,0,0.05)"
+                    : "none",
                 transition: "background 0.2s ease",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "16px",
+                }}
+              >
                 <div
                   style={{
                     width: "40px",
@@ -185,12 +354,20 @@ export default function AdminCategoriesPage() {
                 >
                   <Tag size={20} />
                 </div>
-                <span style={{ fontSize: "15px", fontWeight: "600", color: "var(--text-primary)" }}>
+
+                <span
+                  style={{
+                    fontSize: "15px",
+                    fontWeight: "600",
+                    color: "var(--text-primary)",
+                  }}
+                >
                   {c.name}
                 </span>
               </div>
-              
+
               <button
+                type="button"
                 onClick={() => handleDelete(c.id, c.name)}
                 aria-label="Delete"
                 className="delete-btn"
@@ -241,16 +418,20 @@ export default function AdminCategoriesPage() {
           .admin-page-container {
             padding: 0;
           }
+
           form {
             flex-direction: column;
             align-items: stretch;
           }
+
           input {
             min-width: 100% !important;
           }
+
           button[type="submit"] {
             width: 100%;
           }
+
           .category-item {
             padding: 14px 16px !important;
           }

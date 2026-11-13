@@ -1,6 +1,7 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { verifyAdminRequest } from "@/lib/admin-auth";
 
 // SEO-friendly slug
 function createSlug(name: string) {
@@ -14,6 +15,7 @@ function createSlug(name: string) {
 }
 
 // GET /api/products
+// Public: customers bhi products dekh sakte hain.
 export async function GET() {
   try {
     const products = await prisma.product.findMany({
@@ -32,8 +34,16 @@ export async function GET() {
 }
 
 // POST /api/products
+// Admin only: product create karne ke liye authentication required.
 export async function POST(request: Request) {
   try {
+    if (!verifyAdminRequest(request)) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
 
     const {
@@ -77,10 +87,12 @@ export async function POST(request: Request) {
     }
 
     const productImages: string[] = Array.isArray(images)
-      ? images.filter(
-          (item: unknown): item is string =>
-            typeof item === "string" && item.trim().length > 0
-        ).map((item: string) => item.trim())
+      ? images
+          .filter(
+            (item: unknown): item is string =>
+              typeof item === "string" && item.trim().length > 0
+          )
+          .map((item: string) => item.trim())
       : [];
 
     // Support old frontend using single image
@@ -188,13 +200,9 @@ export async function POST(request: Request) {
         price: productPrice,
         salePrice: productSalePrice,
         stock: productStock,
-
         image: mainImage,
         images: productImages,
         video: productVideo,
-
-        // Actual ratings will be calculated
-        // from customer reviews later.
         rating: 0,
         reviews: 0,
       },

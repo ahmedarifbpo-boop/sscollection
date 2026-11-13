@@ -41,7 +41,11 @@ const navItems = [
   { label: "Settings", href: "/admin/settings", icon: Settings },
 ];
 
-function AdminLayoutContent({ children }: { children: React.ReactNode }) {
+function AdminLayoutContent({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -52,6 +56,10 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   const [authChecked, setAuthChecked] = useState(false);
 
   const prevCountRef = useRef(0);
+
+  // ==========================================
+  // ADMIN SESSION CHECK
+  // ==========================================
 
   useEffect(() => {
     let cancelled = false;
@@ -69,21 +77,37 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
           cache: "no-store",
         });
 
+        if (cancelled) return;
+
+        // Only actual unauthorized session redirects to login.
+        if (res.status === 401) {
+          router.replace("/admin/login");
+          return;
+        }
+
+        // Temporary server errors should not log out the admin.
         if (!res.ok) {
-          if (!cancelled) router.replace("/admin/login");
+          setAuthChecked(true);
           return;
         }
 
         const data = await res.json();
 
+        if (cancelled) return;
+
         if (!data.authenticated) {
-          if (!cancelled) router.replace("/admin/login");
+          router.replace("/admin/login");
           return;
         }
 
-        if (!cancelled) setAuthChecked(true);
-      } catch {
-        if (!cancelled) router.replace("/admin/login");
+        setAuthChecked(true);
+      } catch (error) {
+        console.error("Admin session check error:", error);
+
+        // Network failure should not trigger automatic logout.
+        if (!cancelled) {
+          setAuthChecked(true);
+        }
       }
     }
 
@@ -95,6 +119,10 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
     };
   }, [pathname, router]);
 
+  // ==========================================
+  // NOTIFICATIONS POLLING
+  // ==========================================
+
   useEffect(() => {
     if (pathname === "/admin/login" || !authChecked) return;
 
@@ -103,54 +131,76 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
     async function checkNotifications() {
       try {
         const [ordersRes, chatRes] = await Promise.all([
-          fetch("/api/orders", { cache: "no-store" }),
-          fetch("/api/admin-chat", { cache: "no-store" }),
+          fetch("/api/orders", {
+            method: "GET",
+            credentials: "include",
+            cache: "no-store",
+          }),
+
+          fetch("/api/admin-chat", {
+            method: "GET",
+            credentials: "include",
+            cache: "no-store",
+          }),
         ]);
 
-        if (ordersRes.status === 401 || chatRes.status === 401) {
-          router.replace("/admin/login");
+        // Notification API errors must never redirect admin to login.
+        if (!ordersRes.ok || !chatRes.ok) {
           return;
         }
 
-        if (!ordersRes.ok || !chatRes.ok) return;
-
         const ordersData = await ordersRes.json();
         const chatData = await chatRes.json();
+
+        if (cancelled) return;
 
         const pendingOrders = (ordersData.orders || []).filter(
           (order: any) => order.status === "PENDING"
         ).length;
 
         const totalChats = (chatData.conversations || []).length;
+
         const currentTotal = pendingOrders + totalChats;
 
         if (currentTotal > prevCountRef.current) {
           const diff = currentTotal - prevCountRef.current;
 
-          setIsRinging(true);
+          if (!cancelled) {
+            setIsRinging(true);
 
-          try {
-            new Audio(
-              "https://actions.google.com/sounds/v1/alarms/phone_alerts_and_rings.ogg"
-            )
-              .play()
-              .catch(() => {});
-          } catch {}
+            // Notification sound
+            try {
+              const audio = new Audio(
+                "https://actions.google.com/sounds/v1/alarms/phone_alerts_and_rings.ogg"
+              );
 
-          setToast({
-            title: "New Notification!",
-            msg: `Aapke paas ${diff} naya update aaya hai`,
-          });
+              audio.play().catch(() => {});
+            } catch (error) {}
 
-          setTimeout(() => setIsRinging(false), 4000);
-          setTimeout(() => setToast(null), 5000);
+            // Notification toast
+            setToast({
+              title: "New Notification!",
+              msg: `Aapke paas ${diff} naya update aaya hai`,
+            });
+
+            setTimeout(() => {
+              setIsRinging(false);
+            }, 4000);
+
+            setTimeout(() => {
+              setToast(null);
+            }, 5000);
+          }
         }
 
         if (!cancelled) {
           setNotifications(currentTotal);
           prevCountRef.current = currentTotal;
         }
-      } catch {}
+      } catch (error) {
+        // Notification errors should not log out the admin.
+        console.error("Notification polling error:", error);
+      }
     }
 
     checkNotifications();
@@ -161,15 +211,27 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [pathname, authChecked, router]);
+  }, [pathname, authChecked]);
+
+  // ==========================================
+  // CLOSE MOBILE SIDEBAR ON NAVIGATION
+  // ==========================================
 
   useEffect(() => {
     setIsSidebarOpen(false);
   }, [pathname]);
 
+  // ==========================================
+  // LOGIN PAGE
+  // ==========================================
+
   if (pathname === "/admin/login") {
     return <>{children}</>;
   }
+
+  // ==========================================
+  // SESSION LOADING
+  // ==========================================
 
   if (!authChecked) {
     return (
@@ -189,6 +251,10 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
     );
   }
 
+  // ==========================================
+  // LOGOUT
+  // ==========================================
+
   const handleLogout = async () => {
     try {
       const res = await fetch("/api/admin/logout", {
@@ -196,11 +262,17 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
         credentials: "include",
       });
 
-      if (!res.ok) throw new Error("Logout failed");
+      if (!res.ok) {
+        throw new Error("Logout failed");
+      }
+
+      setAuthChecked(false);
 
       router.replace("/admin/login");
       router.refresh();
-    } catch {
+    } catch (error) {
+      console.error("Logout error:", error);
+
       setToast({
         title: "Logout Failed",
         msg: "Please try again.",
@@ -208,8 +280,20 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // ==========================================
+  // ADMIN LAYOUT UI
+  // ==========================================
+
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg)" }}>
+    <div
+      style={{
+        display: "flex",
+        minHeight: "100vh",
+        background: "var(--bg)",
+      }}
+    >
+      {/* NOTIFICATION TOAST */}
+
       {toast && (
         <div
           style={{
@@ -241,10 +325,23 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
           </div>
 
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: "700", fontSize: "14px", color: "#1B1B1C" }}>
+            <div
+              style={{
+                fontWeight: "700",
+                fontSize: "14px",
+                color: "#1B1B1C",
+              }}
+            >
               {toast.title}
             </div>
-            <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
+
+            <div
+              style={{
+                fontSize: "12px",
+                color: "#666",
+                marginTop: "4px",
+              }}
+            >
               {toast.msg}
             </div>
           </div>
@@ -263,6 +360,8 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
+      {/* MOBILE HEADER */}
+
       <div className="mobile-header">
         <button
           onClick={() => setIsSidebarOpen(true)}
@@ -276,9 +375,21 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
           <Menu size={24} />
         </button>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+          }}
+        >
           <Store size={20} style={{ color: "var(--accent)" }} />
-          <span style={{ fontWeight: "700", fontSize: "15px" }}>
+
+          <span
+            style={{
+              fontWeight: "700",
+              fontSize: "15px",
+            }}
+          >
             Admin Panel
           </span>
         </div>
@@ -288,7 +399,9 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
             size={20}
             color="#fff"
             style={{
-              animation: isRinging ? "ring 0.5s ease-in-out infinite" : "none",
+              animation: isRinging
+                ? "ring 0.5s ease-in-out infinite"
+                : "none",
             }}
           />
 
@@ -312,6 +425,8 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
         </div>
       </div>
 
+      {/* MOBILE SIDEBAR OVERLAY */}
+
       {isSidebarOpen && (
         <div
           onClick={() => setIsSidebarOpen(false)}
@@ -324,6 +439,8 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
           className="sidebar-overlay"
         />
       )}
+
+      {/* SIDEBAR */}
 
       <aside
         className={`sidebar ${isSidebarOpen ? "open" : ""}`}
@@ -340,6 +457,8 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
           zIndex: 50,
         }}
       >
+        {/* SIDEBAR BRAND */}
+
         <div
           style={{
             padding: "24px 20px",
@@ -350,7 +469,13 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
             background: "linear-gradient(to right, #1B1B1C, #222)",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+            }}
+          >
             <div
               style={{
                 background: "var(--accent)",
@@ -403,6 +528,8 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
+        {/* NAVIGATION */}
+
         <nav
           style={{
             flex: 1,
@@ -439,7 +566,13 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                   transition: "all 0.2s ease",
                 }}
               >
-                <Icon size={18} style={{ opacity: isActive ? 1 : 0.7 }} />
+                <Icon
+                  size={18}
+                  style={{
+                    opacity: isActive ? 1 : 0.7,
+                  }}
+                />
+
                 <span>{item.label}</span>
 
                 {isActive && (
@@ -457,6 +590,8 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
+
+        {/* LOGOUT BUTTON */}
 
         <div
           style={{
@@ -489,6 +624,8 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
+      {/* MAIN CONTENT */}
+
       <main
         className="admin-main"
         style={{
@@ -501,24 +638,52 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
         {children}
       </main>
 
+      {/* RESPONSIVE CSS */}
+
       <style jsx>{`
         @keyframes ring {
-          0% { transform: rotate(0); }
-          20% { transform: rotate(15deg); }
-          40% { transform: rotate(-15deg); }
-          60% { transform: rotate(10deg); }
-          80% { transform: rotate(-10deg); }
-          100% { transform: rotate(0); }
+          0% {
+            transform: rotate(0);
+          }
+          20% {
+            transform: rotate(15deg);
+          }
+          40% {
+            transform: rotate(-15deg);
+          }
+          60% {
+            transform: rotate(10deg);
+          }
+          80% {
+            transform: rotate(-10deg);
+          }
+          100% {
+            transform: rotate(0);
+          }
         }
 
         @keyframes slideIn {
-          from { opacity: 0; transform: translateX(50px); }
-          to { opacity: 1; transform: translateX(0); }
+          from {
+            opacity: 0;
+            transform: translateX(50px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
         }
 
-        .mobile-header { display: none; }
-        .close-sidebar-btn { display: none; }
-        .sidebar-overlay { display: none; }
+        .mobile-header {
+          display: none;
+        }
+
+        .close-sidebar-btn {
+          display: none;
+        }
+
+        .sidebar-overlay {
+          display: none;
+        }
 
         @media (max-width: 768px) {
           .mobile-header {
@@ -566,6 +731,10 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
+
+// ==========================================
+// ADMIN LAYOUT EXPORT
+// ==========================================
 
 export default function AdminLayout({
   children,

@@ -38,15 +38,43 @@ export default function AdminProductsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
 
-  // Admin check
+  // Verify admin session
   useEffect(() => {
-    const admin = localStorage.getItem("ss-admin");
+    let cancelled = false;
 
-    if (!admin) {
-      router.replace("/admin/login");
-    } else {
-      setReady(true);
+    async function checkSession() {
+      try {
+        const res = await fetch("/api/admin/session", {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        });
+
+        const data = await res.json();
+
+        if (cancelled) return;
+
+        if (res.status === 401 || !data.authenticated) {
+          router.replace("/admin/login");
+          return;
+        }
+
+        setReady(true);
+      } catch (error) {
+        console.error("Admin session check failed:", error);
+
+        if (!cancelled) {
+          setMessage("Session verify nahi ho saka. Page refresh karein.");
+          setLoading(false);
+        }
+      }
     }
+
+    checkSession();
+
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   // Fetch products
@@ -58,8 +86,14 @@ export default function AdminProductsPage() {
     async function fetchProducts() {
       try {
         const res = await fetch("/api/products", {
+          credentials: "include",
           cache: "no-store",
         });
+
+        if (res.status === 401) {
+          router.replace("/admin/login");
+          return;
+        }
 
         if (!res.ok) {
           throw new Error("Failed to fetch products");
@@ -88,7 +122,7 @@ export default function AdminProductsPage() {
     return () => {
       cancelled = true;
     };
-  }, [ready]);
+  }, [ready, router]);
 
   // Delete product
   const handleDelete = async (id: string, name: string) => {
@@ -109,8 +143,14 @@ export default function AdminProductsPage() {
     try {
       const res = await fetch(`/api/products/${id}`, {
         method: "DELETE",
+        credentials: "include",
         cache: "no-store",
       });
+
+      if (res.status === 401) {
+        router.replace("/admin/login");
+        return;
+      }
 
       const data = await res.json();
 
@@ -121,8 +161,14 @@ export default function AdminProductsPage() {
       setMessage("Product successfully deleted.");
 
       const refresh = await fetch("/api/products", {
+        credentials: "include",
         cache: "no-store",
       });
+
+      if (refresh.status === 401) {
+        router.replace("/admin/login");
+        return;
+      }
 
       if (refresh.ok) {
         const latestData = await refresh.json();
@@ -311,8 +357,7 @@ export default function AdminProductsPage() {
                     ? 1
                     : 0;
 
-              const mainImage =
-                p.image || p.images?.[0] || "";
+              const mainImage = p.image || p.images?.[0] || "";
 
               return (
                 <div
@@ -535,9 +580,7 @@ export default function AdminProductsPage() {
                       }}
                     >
                       {deletingId === p.id ? (
-                        <span style={{ fontSize: "10px" }}>
-                          ...
-                        </span>
+                        <span style={{ fontSize: "10px" }}>...</span>
                       ) : (
                         <Trash2 size={14} />
                       )}

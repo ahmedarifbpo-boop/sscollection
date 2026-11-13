@@ -149,7 +149,8 @@ model Offer {
   id         String   @id @default(cuid())
   title      String
   subtitle   String?
-  image      String
+  image      String?
+  video      String?
   ctaText    String   @default("Shop Now")
   ctaLink    String   @default("/")
   order      Int      @default(0)
@@ -202,12 +203,16 @@ model Settings {
   contactPhone           String?
   address                String?
 
-  freeShippingThreshold  Float    @default(5000)
-  shippingFee             Float    @default(250)
-  enableFreeShipping      Boolean  @default(true)
+  freeShippingThreshold  Float?    
+  shippingFee            Float    @default(250)
+  enableFreeShipping     Boolean  @default(true)
 
-  logoUrl                 String?
-  updatedAt               DateTime @updatedAt
+  logoUrl                String?
+
+  adsenseCode            String?  @db.Text
+  adsenseEnabled         Boolean  @default(false)
+
+  updatedAt              DateTime @updatedAt
 }
 
 // ============ VISITOR LOG ============

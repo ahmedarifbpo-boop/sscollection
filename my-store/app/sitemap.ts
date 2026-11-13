@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // 👇 Yahan 'l' (L) ka istemal kiya hai, 'i' nahi
-  const baseUrl = 'https://sscollection-2ilh.vercel.app';
+  const baseUrl = 'https://www.scollection.online';
 
   // Database se products fetch karein
   let products: any[] = [];

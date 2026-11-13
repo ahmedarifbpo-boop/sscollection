@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -47,52 +48,136 @@ interface Order {
   customer: Customer | null;
 }
 
-const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
-  PENDING: { label: "Pending", color: "#F59E0B", icon: Clock },
-  PROCESSING: { label: "Processing", color: "#3B82F6", icon: Package },
-  SHIPPED: { label: "Shipped", color: "#8B5CF6", icon: Truck },
-  DELIVERED: { label: "Delivered", color: "#10B981", icon: CheckCircle2 },
-  CANCELLED: { label: "Cancelled", color: "#EF4444", icon: XCircle },
+const statusConfig: Record<
+  string,
+  { label: string; color: string; icon: any }
+> = {
+  PENDING: {
+    label: "Pending",
+    color: "#F59E0B",
+    icon: Clock,
+  },
+  PROCESSING: {
+    label: "Processing",
+    color: "#3B82F6",
+    icon: Package,
+  },
+  SHIPPED: {
+    label: "Shipped",
+    color: "#8B5CF6",
+    icon: Truck,
+  },
+  DELIVERED: {
+    label: "Delivered",
+    color: "#10B981",
+    icon: CheckCircle2,
+  },
+  CANCELLED: {
+    label: "Cancelled",
+    color: "#EF4444",
+    icon: XCircle,
+  },
 };
 
 export default function AdminOrdersPage() {
   const router = useRouter();
+
   const [ready, setReady] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("ALL");
+  const [error, setError] = useState("");
 
+  // Admin session check + Orders fetch
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const admin = localStorage.getItem("ss-admin");
-    if (!admin) {
-      router.push("/admin/login");
-      return;
-    }
-    setReady(true);
-  }, [router]);
+    let cancelled = false;
 
-  useEffect(() => {
-    if (!ready) return;
-    async function fetchOrders() {
+    async function loadOrders() {
       try {
-        const res = await fetch("/api/orders");
+        // Step 1: Verify admin session
+        const sessionRes = await fetch("/api/admin/session", {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        });
+
+        if (sessionRes.status === 401) {
+          router.replace("/admin/login");
+          return;
+        }
+
+        if (!sessionRes.ok) {
+          throw new Error("Could not verify admin session.");
+        }
+
+        const sessionData = await sessionRes.json();
+
+        if (!sessionData.authenticated) {
+          router.replace("/admin/login");
+          return;
+        }
+
+        if (cancelled) return;
+
+        setReady(true);
+
+        // Step 2: Fetch orders
+        const res = await fetch("/api/orders", {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        });
+
+        if (res.status === 401) {
+          router.replace("/admin/login");
+          return;
+        }
+
         const data = await res.json();
-        setOrders(data.orders || []);
-      } catch (e) {
-        console.error("Failed to fetch orders:", e);
+
+        if (!res.ok) {
+          throw new Error(data.error || "Failed to fetch orders.");
+        }
+
+        if (!cancelled) {
+          setOrders(data.orders || []);
+          setError("");
+        }
+      } catch (err) {
+        console.error("Failed to fetch orders:", err);
+
+        if (!cancelled) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Failed to fetch orders."
+          );
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setReady(true);
+          setLoading(false);
+        }
       }
     }
-    fetchOrders();
-  }, [ready]);
 
+    loadOrders();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  // Filter orders
   const filtered =
-    filter === "ALL" ? orders : orders.filter((o) => o.status === filter);
+    filter === "ALL"
+      ? orders
+      : orders.filter((order) => order.status === filter);
 
+  // Format date
   const formatDate = (iso: string) => {
     const d = new Date(iso);
+
     return d.toLocaleString("en-PK", {
       day: "2-digit",
       month: "short",
@@ -103,26 +188,80 @@ export default function AdminOrdersPage() {
   };
 
   if (!ready) {
-    return <div style={{ padding: "60px 24px", textAlign: "center", color: "var(--text-muted)" }}>Loading...</div>;
+    return (
+      <div
+        style={{
+          padding: "60px 24px",
+          textAlign: "center",
+          color: "var(--text-muted)",
+        }}
+      >
+        Loading...
+      </div>
+    );
   }
 
   return (
     <div>
       {/* Header */}
       <div style={{ marginBottom: "20px" }}>
-        <h1 style={{ fontSize: "22px", fontWeight: "500", color: "var(--text-primary)", marginBottom: "4px" }}>
+        <h1
+          style={{
+            fontSize: "22px",
+            fontWeight: "500",
+            color: "var(--text-primary)",
+            marginBottom: "4px",
+          }}
+        >
           Orders
         </h1>
+
         <p style={{ fontSize: "13px", color: "var(--text-muted)" }}>
-          {orders.length} total {orders.length === 1 ? "order" : "orders"}
+          {orders.length} total{" "}
+          {orders.length === 1 ? "order" : "orders"}
         </p>
       </div>
 
-      {/* Filter tabs */}
-      <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap" }}>
-        {["ALL", "PENDING", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"].map((s) => {
+      {/* Error Message */}
+      {error && (
+        <div
+          style={{
+            padding: "12px 16px",
+            marginBottom: "16px",
+            borderRadius: "6px",
+            background: "#FEF2F2",
+            color: "#B91C1C",
+            fontSize: "13px",
+          }}
+        >
+          {error}
+        </div>
+      )}
+
+      {/* Filter Tabs */}
+      <div
+        style={{
+          display: "flex",
+          gap: "8px",
+          marginBottom: "20px",
+          flexWrap: "wrap",
+        }}
+      >
+        {[
+          "ALL",
+          "PENDING",
+          "PROCESSING",
+          "SHIPPED",
+          "DELIVERED",
+          "CANCELLED",
+        ].map((s) => {
           const isActive = filter === s;
-          const count = s === "ALL" ? orders.length : orders.filter((o) => o.status === s).length;
+
+          const count =
+            s === "ALL"
+              ? orders.length
+              : orders.filter((o) => o.status === s).length;
+
           return (
             <button
               key={s}
@@ -132,13 +271,22 @@ export default function AdminOrdersPage() {
                 borderRadius: "3px",
                 fontSize: "12px",
                 fontWeight: "500",
-                border: isActive ? "1px solid var(--accent)" : "1px solid var(--border)",
-                background: isActive ? "var(--accent)" : "var(--surface)",
-                color: isActive ? "#fff" : "var(--text-secondary)",
+                border: isActive
+                  ? "1px solid var(--accent)"
+                  : "1px solid var(--border)",
+                background: isActive
+                  ? "var(--accent)"
+                  : "var(--surface)",
+                color: isActive
+                  ? "#fff"
+                  : "var(--text-secondary)",
                 cursor: "pointer",
               }}
             >
-              {s === "ALL" ? "All" : statusConfig[s]?.label || s} ({count})
+              {s === "ALL"
+                ? "All"
+                : statusConfig[s]?.label || s}{" "}
+              ({count})
             </button>
           );
         })}
@@ -146,93 +294,296 @@ export default function AdminOrdersPage() {
 
       {/* Content */}
       {loading ? (
-        <div className="dz-card" style={{ padding: "60px 24px", textAlign: "center", color: "var(--text-muted)" }}>
+        <div
+          className="dz-card"
+          style={{
+            padding: "60px 24px",
+            textAlign: "center",
+            color: "var(--text-muted)",
+          }}
+        >
           Loading orders...
         </div>
       ) : filtered.length === 0 ? (
-        <div className="dz-card" style={{ padding: "60px 24px", textAlign: "center" }}>
-          <ShoppingBag size={48} style={{ color: "var(--border-strong)", marginBottom: "12px" }} />
-          <h2 style={{ fontSize: "16px", fontWeight: "500", color: "var(--text-primary)", marginBottom: "6px" }}>
-            {filter === "ALL" ? "No orders yet" : `No ${filter.toLowerCase()} orders`}
+        <div
+          className="dz-card"
+          style={{
+            padding: "60px 24px",
+            textAlign: "center",
+          }}
+        >
+          <ShoppingBag
+            size={48}
+            style={{
+              color: "var(--border-strong)",
+              marginBottom: "12px",
+            }}
+          />
+
+          <h2
+            style={{
+              fontSize: "16px",
+              fontWeight: "500",
+              color: "var(--text-primary)",
+              marginBottom: "6px",
+            }}
+          >
+            {filter === "ALL"
+              ? "No orders yet"
+              : `No ${filter.toLowerCase()} orders`}
           </h2>
-          <p style={{ fontSize: "13px", color: "var(--text-muted)" }}>
+
+          <p
+            style={{
+              fontSize: "13px",
+              color: "var(--text-muted)",
+            }}
+          >
             {filter === "ALL"
               ? "When customers place orders, they will appear here."
               : "Try a different filter."}
           </p>
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "12px",
+          }}
+        >
           {filtered.map((order) => {
-            const cfg = statusConfig[order.status] || statusConfig.PENDING;
+            const cfg =
+              statusConfig[order.status] || statusConfig.PENDING;
+
             const StatusIcon = cfg.icon;
-            
-            // Check karo ke coins involved hain ya nahi
-            const hasCoins = order.coinsUsed > 0 || order.coinsEarned > 0 || order.customer?.referredBy;
+
+            // Check if coins are involved
+            const hasCoins =
+              order.coinsUsed > 0 ||
+              order.coinsEarned > 0 ||
+              !!order.customer?.referredBy;
 
             return (
-              <div key={order.id} className="dz-card" style={{ padding: "16px" }}>
-                
-                {/* Top row */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px", flexWrap: "wrap", gap: "12px" }}>
+              <div
+                key={order.id}
+                className="dz-card"
+                style={{ padding: "16px" }}
+              >
+                {/* Top Row */}
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    marginBottom: "12px",
+                    flexWrap: "wrap",
+                    gap: "12px",
+                  }}
+                >
                   <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px" }}>
-                      <span style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "10px",
+                        marginBottom: "4px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "14px",
+                          fontWeight: "700",
+                          color: "var(--text-primary)",
+                        }}
+                      >
                         {order.orderNumber}
                       </span>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: `${cfg.color}15`, color: cfg.color, padding: "3px 8px", borderRadius: "3px", fontSize: "11px", fontWeight: "700" }}>
+
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          background: `${cfg.color}15`,
+                          color: cfg.color,
+                          padding: "3px 8px",
+                          borderRadius: "3px",
+                          fontSize: "11px",
+                          fontWeight: "700",
+                        }}
+                      >
                         <StatusIcon size={12} />
                         {cfg.label}
                       </span>
                     </div>
-                    <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        color: "var(--text-muted)",
+                      }}
+                    >
                       {formatDate(order.createdAt)}
                     </div>
                   </div>
 
-                  {/* Total aur Coins Section */}
+                  {/* Total and Coins */}
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "2px" }}>
+                    <div
+                      style={{
+                        fontSize: "11px",
+                        color: "var(--text-muted)",
+                        marginBottom: "2px",
+                      }}
+                    >
                       Total (COD)
                     </div>
-                    <div style={{ fontSize: "18px", fontWeight: "700", color: "var(--accent)", marginBottom: "4px" }}>
+
+                    <div
+                      style={{
+                        fontSize: "18px",
+                        fontWeight: "700",
+                        color: "var(--accent)",
+                        marginBottom: "4px",
+                      }}
+                    >
                       Rs. {order.total.toLocaleString()}
                     </div>
-                    
-                    {/* Naya Coins Badge */}
+
+                    {/* Coins Badge */}
                     {hasCoins && (
-                      <div style={{ display: "inline-flex", flexDirection: "column", alignItems: "flex-end", gap: "2px", background: "#FFFBEB", padding: "4px 8px", borderRadius: "3px", fontSize: "11px", color: "#B45309", border: "1px solid #FDE68A" }}>
-                        {order.coinsUsed > 0 && <span style={{ display: "flex", alignItems: "center", gap: "4px" }}><Coins size={10} /> Used: Rs. {order.coinsUsed.toLocaleString()}</span>}
-                        {order.coinsEarned > 0 && <span style={{ display: "flex", alignItems: "center", gap: "4px" }}><Coins size={10} /> Earned: Rs. {order.coinsEarned.toFixed(0)}</span>}
-                        {order.customer?.referredBy && <span style={{ fontWeight: "600" }}>Ref: {order.customer.referredBy}</span>}
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          flexDirection: "column",
+                          alignItems: "flex-end",
+                          gap: "2px",
+                          background: "#FFFBEB",
+                          padding: "4px 8px",
+                          borderRadius: "3px",
+                          fontSize: "11px",
+                          color: "#B45309",
+                          border: "1px solid #FDE68A",
+                        }}
+                      >
+                        {order.coinsUsed > 0 && (
+                          <span
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px",
+                            }}
+                          >
+                            <Coins size={10} />
+                            Used: Rs.{" "}
+                            {order.coinsUsed.toLocaleString()}
+                          </span>
+                        )}
+
+                        {order.coinsEarned > 0 && (
+                          <span
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px",
+                            }}
+                          >
+                            <Coins size={10} />
+                            Earned: Rs.{" "}
+                            {order.coinsEarned.toFixed(0)}
+                          </span>
+                        )}
+
+                        {order.customer?.referredBy && (
+                          <span style={{ fontWeight: "600" }}>
+                            Ref: {order.customer.referredBy}
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>
                 </div>
 
-                {/* Customer */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px", padding: "12px", background: "var(--bg-alt)", borderRadius: "3px", marginBottom: "12px" }}>
+                {/* Customer Details */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fit, minmax(200px, 1fr))",
+                    gap: "12px",
+                    padding: "12px",
+                    background: "var(--bg-alt)",
+                    borderRadius: "3px",
+                    marginBottom: "12px",
+                  }}
+                >
                   <div>
-                    <div style={{ fontSize: "10px", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "2px" }}>
+                    <div
+                      style={{
+                        fontSize: "10px",
+                        color: "var(--text-muted)",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                        marginBottom: "2px",
+                      }}
+                    >
                       Customer
                     </div>
-                    <div style={{ fontSize: "13px", fontWeight: "500", color: "var(--text-primary)" }}>
+
+                    <div
+                      style={{
+                        fontSize: "13px",
+                        fontWeight: "500",
+                        color: "var(--text-primary)",
+                      }}
+                    >
                       {order.customerName}
                     </div>
                   </div>
+
                   <div>
-                    <div style={{ fontSize: "10px", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "2px" }}>
+                    <div
+                      style={{
+                        fontSize: "10px",
+                        color: "var(--text-muted)",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                        marginBottom: "2px",
+                      }}
+                    >
                       Phone
                     </div>
-                    <div style={{ fontSize: "13px", color: "var(--text-primary)" }}>
+
+                    <div
+                      style={{
+                        fontSize: "13px",
+                        color: "var(--text-primary)",
+                      }}
+                    >
                       {order.customerPhone}
                     </div>
                   </div>
+
                   <div style={{ gridColumn: "1 / -1" }}>
-                    <div style={{ fontSize: "10px", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "2px" }}>
+                    <div
+                      style={{
+                        fontSize: "10px",
+                        color: "var(--text-muted)",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                        marginBottom: "2px",
+                      }}
+                    >
                       Address
                     </div>
-                    <div style={{ fontSize: "13px", color: "var(--text-primary)" }}>
+
+                    <div
+                      style={{
+                        fontSize: "13px",
+                        color: "var(--text-primary)",
+                      }}
+                    >
                       {order.customerAddress}
                     </div>
                   </div>
@@ -240,23 +591,85 @@ export default function AdminOrdersPage() {
 
                 {/* Items */}
                 <div style={{ marginBottom: "12px" }}>
-                  <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  <div
+                    style={{
+                      fontSize: "11px",
+                      color: "var(--text-muted)",
+                      marginBottom: "6px",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                    }}
+                  >
                     Items ({order.items.length})
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "6px",
+                    }}
+                  >
                     {order.items.map((item) => (
-                      <div key={item.id} style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                        <img src={item.image} alt={item.name} style={{ width: "36px", height: "36px", objectFit: "cover", borderRadius: "3px", flexShrink: 0 }} />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div className="line-clamp-1" style={{ fontSize: "12px", color: "var(--text-primary)" }}>
+                      <div
+                        key={item.id}
+                        style={{
+                          display: "flex",
+                          gap: "10px",
+                          alignItems: "center",
+                        }}
+                      >
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          style={{
+                            width: "36px",
+                            height: "36px",
+                            objectFit: "cover",
+                            borderRadius: "3px",
+                            flexShrink: 0,
+                          }}
+                        />
+
+                        <div
+                          style={{
+                            flex: 1,
+                            minWidth: 0,
+                          }}
+                        >
+                          <div
+                            className="line-clamp-1"
+                            style={{
+                              fontSize: "12px",
+                              color: "var(--text-primary)",
+                            }}
+                          >
                             {item.name}
                           </div>
-                          <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                            Qty: {item.quantity} × Rs. {item.price.toLocaleString()}
+
+                          <div
+                            style={{
+                              fontSize: "11px",
+                              color: "var(--text-muted)",
+                            }}
+                          >
+                            Qty: {item.quantity} × Rs.{" "}
+                            {item.price.toLocaleString()}
                           </div>
                         </div>
-                        <div style={{ fontSize: "12px", fontWeight: "500", color: "var(--text-primary)", whiteSpace: "nowrap" }}>
-                          Rs. {(item.price * item.quantity).toLocaleString()}
+
+                        <div
+                          style={{
+                            fontSize: "12px",
+                            fontWeight: "500",
+                            color: "var(--text-primary)",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          Rs.{" "}
+                          {(
+                            item.price * item.quantity
+                          ).toLocaleString()}
                         </div>
                       </div>
                     ))}
@@ -264,9 +677,29 @@ export default function AdminOrdersPage() {
                 </div>
 
                 {/* Actions */}
-                <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", paddingTop: "12px", borderTop: "1px solid var(--border)" }}>
-                  <Link href={`/admin/orders/${order.id}`} className="dz-btn-secondary" style={{ display: "inline-flex", alignItems: "center", gap: "6px", textDecoration: "none", fontSize: "12px", padding: "8px 14px" }}>
-                    <Eye size={14} /> View Details
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "8px",
+                    justifyContent: "flex-end",
+                    paddingTop: "12px",
+                    borderTop: "1px solid var(--border)",
+                  }}
+                >
+                  <Link
+                    href={`/admin/orders/${order.id}`}
+                    className="dz-btn-secondary"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      textDecoration: "none",
+                      fontSize: "12px",
+                      padding: "8px 14px",
+                    }}
+                  >
+                    <Eye size={14} />
+                    View Details
                   </Link>
                 </div>
               </div>
