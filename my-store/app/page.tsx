@@ -1,40 +1,51 @@
+
 import HomeClient from "./HomeClient";
 
 async function getData() {
   try {
-    // Yahan apni site ka URL dalein (production mein apna domain dalein)
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+    const baseUrl =
+      process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+
+    const fetchOptions: RequestInit = {
+      cache: "no-store",
+    };
 
     const [prodRes, catRes, offerRes] = await Promise.all([
-      fetch(`${baseUrl}/api/products`, { next: { revalidate: 60 } }), // 60 sec cache
-      fetch(`${baseUrl}/api/categories`, { next: { revalidate: 60 } }),
-      fetch(`${baseUrl}/api/offers`, { next: { revalidate: 60 } })
+      fetch(`${baseUrl}/api/products`, fetchOptions),
+      fetch(`${baseUrl}/api/categories`, fetchOptions),
+      fetch(`${baseUrl}/api/offers`, fetchOptions),
     ]);
 
-    const prodData = prodRes.ok ? await prodRes.json() : { products: [] };
-    const catData = catRes.ok ? await catRes.json() : { categories: [] };
-    const offerData = offerRes.ok ? await offerRes.json() : { offers: [] };
+    const [prodData, catData, offerData] = await Promise.all([
+      prodRes.ok ? prodRes.json() : Promise.resolve({ products: [] }),
+      catRes.ok ? catRes.json() : Promise.resolve({ categories: [] }),
+      offerRes.ok ? offerRes.json() : Promise.resolve({ offers: [] }),
+    ]);
 
     return {
       products: prodData.products || [],
       categories: catData.categories || [],
-      offers: offerData.offers || []
+      offers: offerData.offers || [],
     };
-  } catch (e) {
-    console.error("Fetch error:", e);
-    return { products: [], categories: [], offers: [] };
+  } catch (error) {
+    console.error("Home page fetch error:", error);
+
+    return {
+      products: [],
+      categories: [],
+      offers: [],
+    };
   }
 }
 
 export default async function Page() {
   const data = await getData();
-  
-  // Data ko Client Component mein pass kar rahe hain
+
   return (
-    <HomeClient 
-      initialProducts={data.products} 
-      initialCategories={data.categories} 
-      initialOffers={data.offers} 
+    <HomeClient
+      initialProducts={data.products}
+      initialCategories={data.categories}
+      initialOffers={data.offers}
     />
   );
 }

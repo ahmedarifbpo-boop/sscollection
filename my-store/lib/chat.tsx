@@ -1,3 +1,4 @@
+
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
@@ -15,6 +16,9 @@ interface ChatContextType {
   clearChat: () => void;
   unreadCount: number;
   markAllRead: () => void;
+  isChatOpen: boolean;
+  openChat: () => void;
+  closeChat: () => void;
 }
 
 const ChatContext = createContext<ChatContextType>({
@@ -23,22 +27,28 @@ const ChatContext = createContext<ChatContextType>({
   clearChat: () => {},
   unreadCount: 0,
   markAllRead: () => {},
+  isChatOpen: false,
+  openChat: () => {},
+  closeChat: () => {},
 });
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [mounted, setMounted] = useState(false);
   const [lastReadAt, setLastReadAt] = useState(0);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem("ss-chat-messages");
       if (saved) setMessages(JSON.parse(saved));
+
       const read = localStorage.getItem("ss-chat-read");
       if (read) setLastReadAt(parseInt(read));
     } catch (e) {
       // ignore
     }
+
     setMounted(true);
   }, []);
 
@@ -54,12 +64,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   const sendMessage = (text: string) => {
     if (!text.trim()) return;
+
     const msg: ChatMessage = {
       id: Date.now().toString(),
       sender: "customer",
       text: text.trim(),
       timestamp: Date.now(),
     };
+
     setMessages((prev) => [...prev, msg]);
   };
 
@@ -67,14 +79,25 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   const markAllRead = () => setLastReadAt(Date.now());
 
-  // Unread = admin messages that came after last read
+  const openChat = () => setIsChatOpen(true);
+  const closeChat = () => setIsChatOpen(false);
+
   const unreadCount = messages.filter(
     (m) => m.sender === "admin" && m.timestamp > lastReadAt
   ).length;
 
   return (
     <ChatContext.Provider
-      value={{ messages, sendMessage, clearChat, unreadCount, markAllRead }}
+      value={{
+        messages,
+        sendMessage,
+        clearChat,
+        unreadCount,
+        markAllRead,
+        isChatOpen,
+        openChat,
+        closeChat,
+      }}
     >
       {children}
     </ChatContext.Provider>

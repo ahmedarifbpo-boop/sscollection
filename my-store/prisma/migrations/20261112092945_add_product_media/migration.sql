@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "Product" ADD COLUMN     "images" TEXT[] DEFAULT ARRAY[]::TEXT[],
+ADD COLUMN     "video" TEXT,
+ALTER COLUMN "image" SET DEFAULT '',
+ALTER COLUMN "rating" SET DEFAULT 0;

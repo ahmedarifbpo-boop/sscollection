@@ -1,8 +1,17 @@
+
 "use client";
 
 import { useState } from "react";
 import Link from "next/link";
-import { Home, LayoutGrid, ShoppingCart, ChevronDown } from "lucide-react";
+import { usePathname } from "next/navigation";
+import {
+  Home,
+  LayoutGrid,
+  ShoppingCart,
+  ChevronDown,
+  X,
+} from "lucide-react";
+import { useCart } from "@/lib/cart";
 
 const categories = [
   { name: "Fashion", slug: "fashion" },
@@ -15,72 +24,116 @@ const categories = [
 
 export default function Sidebar() {
   const [catOpen, setCatOpen] = useState(false);
+  const pathname = usePathname();
+  const { totalItems } = useCart();
 
   return (
-    <aside
-      className="fixed left-0 top-16 bottom-0 w-20 lg:w-64 glass border-r border-white/5 z-40"
-    >
-      <nav className="p-4 space-y-2">
-
-        {/* Home */}
-        <Link
-          href="/"
-          className="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-white/5 transition-all group"
-          style={{ color: "var(--text)" }}
-        >
-          <Home size={20} className="group-hover:text-indigo-400 transition-colors" />
-          <span className="hidden lg:inline text-sm font-medium">Home</span>
-        </Link>
-
-        {/* Category with dropdown */}
-        <div>
-          <button
-            onClick={() => setCatOpen(!catOpen)}
-            className="w-full flex items-center justify-between gap-3 px-3 py-3 rounded-xl hover:bg-white/5 transition-all group"
-            style={{ color: "var(--text)" }}
+    <>
+      {/* Desktop Sidebar */}
+      <aside className="site-sidebar">
+        <nav className="site-sidebar-nav">
+          <Link
+            href="/"
+            className={`sidebar-link ${pathname === "/" ? "active" : ""}`}
           >
-            <div className="flex items-center gap-3">
-              <LayoutGrid size={20} className="group-hover:text-indigo-400 transition-colors" />
-              <span className="hidden lg:inline text-sm font-medium">Category</span>
-            </div>
+            <Home size={20} />
+            <span>Home</span>
+          </Link>
+
+          <button
+            type="button"
+            onClick={() => setCatOpen(!catOpen)}
+            className="sidebar-link sidebar-category-button"
+            aria-expanded={catOpen}
+          >
+            <LayoutGrid size={20} />
+            <span>Category</span>
             <ChevronDown
               size={16}
-              className={`hidden lg:block transition-transform duration-300 ${
-                catOpen ? "rotate-180" : ""
-              }`}
+              className={catOpen ? "sidebar-chevron open" : "sidebar-chevron"}
             />
           </button>
 
           {catOpen && (
-            <div className="hidden lg:block mt-1 ml-6 pl-3 border-l border-white/10 space-y-1 dropdown-in">
-              {categories.map((c) => (
+            <div className="sidebar-categories">
+              {categories.map((category) => (
                 <Link
-                  key={c.slug}
-                  href={`/category/${c.slug}`}
-                  className="block px-3 py-2 rounded-lg text-sm opacity-60 hover:opacity-100 hover:bg-white/5 transition-all"
-                  style={{ color: "var(--text)" }}
+                  key={category.slug}
+                  href={`/category/${category.slug}`}
+                  className="sidebar-category-link"
                 >
-                  {c.name}
+                  {category.name}
                 </Link>
               ))}
             </div>
           )}
-        </div>
 
-        {/* Cart & Checkout */}
-        <Link
-          href="/cart"
-          className="relative flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-white/5 transition-all group"
-          style={{ color: "var(--text)" }}
-        >
-          <ShoppingCart size={20} className="group-hover:text-indigo-400 transition-colors" />
-          <span className="hidden lg:inline text-sm font-medium">Cart & Checkout</span>
-          <span className="absolute top-2 right-2 lg:right-4 w-5 h-5 rounded-full bg-indigo-600 text-[10px] flex items-center justify-center font-bold text-white">
-            0
-          </span>
+          <Link
+            href="/cart"
+            className={`sidebar-link ${pathname === "/cart" ? "active" : ""}`}
+          >
+            <ShoppingCart size={20} />
+            <span>Cart & Checkout</span>
+            {totalItems > 0 && (
+              <span className="sidebar-cart-count">{totalItems}</span>
+            )}
+          </Link>
+        </nav>
+      </aside>
+
+      {/* Mobile Categories Panel */}
+      {catOpen && (
+        <div className="mobile-category-panel">
+          <div className="mobile-category-heading">
+            <strong>Categories</strong>
+            <button
+              type="button"
+              onClick={() => setCatOpen(false)}
+              aria-label="Close categories"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          {categories.map((category) => (
+            <Link
+              key={category.slug}
+              href={`/category/${category.slug}`}
+              onClick={() => setCatOpen(false)}
+              className="mobile-category-link"
+            >
+              {category.name}
+            </Link>
+          ))}
+        </div>
+      )}
+
+      {/* Mobile Bottom Navigation */}
+      <nav className="mobile-bottom-nav">
+        <Link href="/" className={pathname === "/" ? "active" : ""}>
+          <Home size={21} />
+          <span>Home</span>
         </Link>
 
+        <button
+          type="button"
+          onClick={() => setCatOpen(!catOpen)}
+          className={catOpen ? "active" : ""}
+        >
+          <LayoutGrid size={21} />
+          <span>Categories</span>
+        </button>
+
+        <Link href="/cart" className={pathname === "/cart" ? "active" : ""}>
+          <span className="mobile-cart-icon">
+            <ShoppingCart size={21} />
+            {totalItems > 0 && (
+              <span className="mobile-cart-count">{totalItems}</span>
+            )}
+          </span>
+          <span>Cart</span>
+        </Link>
       </nav>
-    </aside>
+    </>
   );
 }

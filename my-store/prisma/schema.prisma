@@ -1,3 +1,4 @@
+
 generator client {
   provider = "prisma-client"
   output   = "../lib/generated/prisma"
@@ -8,76 +9,142 @@ datasource db {
 }
 
 // ============ PRODUCTS ============
+
 model Product {
   id          String   @id @default(cuid())
   name        String
+  slug        String   @unique
   description String
   category    String
   price       Float
   salePrice   Float?
   stock       Int      @default(0)
-  image       String
-  rating      Float    @default(4.5)
+
+  image       String   @default("")
+  images      String[] @default([])
+  video       String?
+
+  rating      Float    @default(0)
   reviews     Int      @default(0)
+
+  metaTitle       String?
+  metaDescription String?
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   orderItems  OrderItem[]
+  reviewsData Review[]
+
+  @@index([category])
+  @@index([slug])
 }
 
 // ============ ORDERS ============
+
 model Order {
   id                String   @id @default(cuid())
   orderNumber       String   @unique
+
   customerName      String
   customerPhone     String
   customerAddress   String
   customerEmail     String?
   notes             String?
+
   subtotal          Float
   shipping          Float    @default(0)
   total             Float
+
   status            String   @default("PENDING")
   paymentMethod     String   @default("COD")
-  
-  // Naye Features (Email Verification ke liye)
+
   isVerified        Boolean  @default(false)
   verificationToken String?  @unique
-  
-  // Naya Feature (Referral & Coins ke liye)
-  customerId        String?  // Kis customer ne order kiya
-  coinsUsed         Float    @default(0) // Kitne coins use kiye
-  coinsEarned       Float    @default(0) // Kitne coins mile (3%)
-  
+
+  reviewToken       String?  @unique
+
+  // Secure customer order history token
+  historyToken      String?  @db.VarChar(128)
+
+  customerId        String?
+  coinsUsed         Float    @default(0)
+  coinsEarned       Float    @default(0)
+
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   items             OrderItem[]
   customer          Customer? @relation(fields: [customerId], references: [id])
+  reviews           Review[]
+  returnRequests ReturnRequest[]
+
+  @@index([status])
+  @@index([customerId])
+  @@index([historyToken])
 }
+
+// ============ ORDER ITEMS ============
 
 model OrderItem {
   id         String   @id @default(cuid())
   orderId    String
   order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
   productId  String
   product    Product  @relation(fields: [productId], references: [id])
+
   name       String
   price      Float
   quantity   Int
   image      String
+
   createdAt  DateTime @default(now())
+
+  @@index([orderId])
+}
+
+// ============ PRODUCT REVIEWS ============
+
+model Review {
+  id               String   @id @default(cuid())
+
+  productId        String
+  orderId          String
+  customerId       String?
+
+  customerName     String
+  rating           Int
+  comment          String
+
+  status           String   @default("PENDING")
+  verifiedPurchase Boolean  @default(true)
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  product          Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  order            Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customer         Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@unique([orderId, productId])
+  @@index([productId, status])
+  @@index([customerId])
+  @@index([orderId])
 }
 
 // ============ CATEGORIES ============
+
 model Category {
   id         String   @id @default(cuid())
   name       String   @unique
+  slug       String   @unique
   icon       String?
   createdAt  DateTime @default(now())
 }
 
-// ============ OFFERS (Hero Slider) ============
+// ============ OFFERS ============
+
 model Offer {
   id         String   @id @default(cuid())
   title      String
@@ -91,6 +158,7 @@ model Offer {
 }
 
 // ============ CHAT ============
+
 model ChatConversation {
   id             String   @id @default(cuid())
   sessionId      String   @unique
@@ -107,12 +175,16 @@ model ChatMessage {
   id              String            @id @default(cuid())
   conversationId  String
   conversation    ChatConversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
   sender          String
   text            String
   createdAt       DateTime          @default(now())
+
+  @@index([conversationId])
 }
 
 // ============ ADMIN ============
+
 model Admin {
   id         String   @id @default(cuid())
   email      String   @unique
@@ -121,52 +193,115 @@ model Admin {
   createdAt  DateTime @default(now())
 }
 
-// ============ Settings ============
+// ============ SETTINGS ============
+
 model Settings {
   id                     String   @id @default(cuid())
   storeName              String   @default("S.S Collection")
   contactEmail           String?
   contactPhone           String?
   address                String?
+
   freeShippingThreshold  Float    @default(5000)
-  shippingFee            Float    @default(250)
-  enableFreeShipping     Boolean  @default(true)
-  logoUrl                String?
-  updatedAt              DateTime @updatedAt
+  shippingFee             Float    @default(250)
+  enableFreeShipping      Boolean  @default(true)
+
+  logoUrl                 String?
+  updatedAt               DateTime @updatedAt
 }
 
 // ============ VISITOR LOG ============
+
 model VisitorLog {
-  id        String   @id @default(cuid())
-  ip        String
-  page      String
-  createdAt DateTime @default(now())
+  id               String   @id @default(cuid())
+  ip               String
+  visitorId        String?
+  sessionId        String?
+  page             String
+  browser          String?
+  deviceType       String?
+  eventType        String   @default("page_view")
+  productId        String?
+  trafficSource    String?
+  referrer         String?
+  city             String?
+  country          String?
+  durationSeconds  Int?
+  eventData        Json?
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([eventType])
+  @@index([visitorId])
+  @@index([sessionId])
+  @@index([productId])
 }
 
-// ============ CUSTOMER (NEW) ============
+// ============ CUSTOMER ============
+
 model Customer {
   id             String   @id @default(cuid())
   name           String
   email          String   @unique
   phone          String   @unique
-  referralCode   String   @unique // Har customer ka apna code
-  referredBy     String?  // Jisne refer kiya (uska code)
+
+  referralCode   String   @unique
+  referredBy     String?
+
   coins          Float    @default(0)
   totalReferrals Int      @default(0)
-  hasOrdered     Boolean  @default(false) // Pehla order hua ya nahi
+
+  hasOrdered     Boolean  @default(false)
   canRefer       Boolean  @default(true)
+
+  // Optional customer-level history token
+  historyToken   String?  @unique @db.VarChar(128)
+
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   orders         Order[]
+  reviews        Review[]
 }
 
-// ============ REFERRAL LOG (NEW) ============
+// ============ REFERRAL LOG ============
+
 model ReferralLog {
   id             String   @id @default(cuid())
-  referrerCode   String   // Jisne refer kiya (code)
-  referredEmail  String   // Naye customer ki email
-  status         String   @default("PENDING") // PENDING, COMPLETED
+  referrerCode   String
+  referredEmail  String
+  status         String   @default("PENDING")
   coinsAwarded   Float    @default(0)
   createdAt      DateTime @default(now())
+
+  @@index([referrerCode])
+}
+
+// ============ RETURN REQUESTS ============
+
+
+model ReturnRequest {
+  id              String   @id @default(cuid())
+
+  orderId         String
+  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  reason          String
+  details         String?
+
+  customerPhone   String
+  customerEmail   String?
+  customerAddress String
+
+  images          String[] @default([])
+  videos          String[] @default([])
+
+  status          String   @default("NEW")
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([status])
+  @@index([createdAt])
 }

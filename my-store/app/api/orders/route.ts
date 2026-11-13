@@ -1,22 +1,37 @@
+
 import { NextResponse } from "next/server";
+import { randomBytes, randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { Resend } from "resend";
 import { generateOrderEmail } from "@/lib/email-template";
+import { verifyAdminRequest } from "@/lib/admin-auth";
 
-// GET /api/orders — saare orders (admin panel ke liye)
-export async function GET() {
+export const runtime = "nodejs";
+
+const HISTORY_COOKIE = "ss-order-history";
+const HISTORY_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
+
+export async function GET(request: Request) {
   try {
+    if (!verifyAdminRequest(request)) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
     const orders = await prisma.order.findMany({
       orderBy: { createdAt: "desc" },
       include: {
         items: true,
-        customer: true, // 👈 Customer ki detail bhi sath layein
+        customer: true,
       },
     });
 
     return NextResponse.json({ orders });
   } catch (error) {
-    console.error("GET /api/orders error:", error);
+    console.error("GET /api/orders:", error);
+
     return NextResponse.json(
       { error: "Failed to fetch orders" },
       { status: 500 }
@@ -24,7 +39,6 @@ export async function GET() {
   }
 }
 
-// POST /api/orders — naya order place karo (customer se)
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -36,141 +50,349 @@ export async function POST(request: Request) {
       customerEmail,
       notes,
       items,
-      coinsUsed = 0, // 👈 Naya: Customer ne kitne coins use kiye
+      coinsUsed = 0,
     } = body;
 
-    // Validation
-    if (!customerName || !customerPhone || !customerAddress) {
+    // Validate customer details
+    if (
+      typeof customerName !== "string" ||
+      !customerName.trim() ||
+      typeof customerPhone !== "string" ||
+      !customerPhone.trim() ||
+      typeof customerAddress !== "string" ||
+      !customerAddress.trim()
+    ) {
       return NextResponse.json(
         { error: "Name, phone, and address are required" },
         { status: 400 }
       );
     }
 
-    if (!items || !Array.isArray(items) || items.length === 0) {
+    // Validate order items
+    if (!Array.isArray(items) || !items.length || items.length > 50) {
       return NextResponse.json(
-        { error: "Order must have at least one item" },
+        { error: "Invalid order items" },
         { status: 400 }
       );
     }
 
-    // Subtotal calculate karo
-    const subtotal = items.reduce(
-      (sum: number, item: any) =>
-        sum + Number(item.price) * Number(item.quantity),
-      0
-    );
-
-    // Shipping — Rs. 500000 se zyada pe FREE, warna Rs. 250
-    const shipping = subtotal > 500000 ? 0 : 250;
-    
-    // Coins Deduct karo (Agar customer ne coins use kiye hain)
     const usedCoins = Number(coinsUsed);
-    const totalBeforeCoins = subtotal + shipping;
-    const finalTotal = Math.max(0, totalBeforeCoins - usedCoins); // Total 0 se kam nahi ho sakta
 
-    // 3% Coins Earn calculate karo (Order ki value ka 3%)
-    const coinsEarned = finalTotal * 0.03;
-
-    // Order number banao
-    const orderNumber = `SS-${new Date().getFullYear()}-${Math.floor(
-      1000 + Math.random() * 9000
-    )}`;
-
-    // Customer ko dhoondo agar email diya hai (taake uske coins deduct kar sakein aur order link karein)
-    let customerId = null;
-    if (customerEmail) {
-      const customer = await prisma.customer.findUnique({
-        where: { email: customerEmail },
-      });
-      if (customer) {
-        customerId = customer.id;
-
-        // Agar coins use kiye hain, to customer ke account se minus karo
-        if (usedCoins > 0) {
-          if (customer.coins < usedCoins) {
-            return NextResponse.json({ error: "Not enough coins available" }, { status: 400 });
-          }
-          await prisma.customer.update({
-            where: { id: customer.id },
-            data: { coins: { decrement: usedCoins } },
-          });
-        }
-
-        // Customer ko mark karo ke usne order kar diya hai (referral ke liye)
-        await prisma.customer.update({
-          where: { id: customer.id },
-          data: { hasOrdered: true },
-        });
-      }
+    if (!Number.isFinite(usedCoins) || usedCoins < 0) {
+      return NextResponse.json(
+        { error: "Invalid coins amount" },
+        { status: 400 }
+      );
     }
 
-    const order = await prisma.order.create({
-      data: {
-        orderNumber,
-        customerName: String(customerName).trim(),
-        customerPhone: String(customerPhone).trim(),
-        customerAddress: String(customerAddress).trim(),
-        customerEmail: customerEmail ? String(customerEmail).trim() : null,
-        notes: notes ? String(notes).trim() : null,
-        subtotal,
-        shipping,
-        total: finalTotal,
-        coinsUsed: usedCoins,        // 👈 Naya
-        coinsEarned: coinsEarned,    // 👈 Naya
-        status: "PENDING",
-        paymentMethod: "COD",
-        customerId,                  // 👈 Naya
-        items: {
-          create: items.map((item: any) => ({
-            productId: String(item.productId),
-            name: String(item.name),
-            price: Number(item.price),
-            quantity: Number(item.quantity),
-            image: String(item.image),
-          })),
-        },
-      },
-      include: {
-        items: true,
-      },
+    // Normalize email
+    const normalizedEmail =
+      typeof customerEmail === "string" && customerEmail.trim()
+        ? customerEmail.trim().toLowerCase()
+        : null;
+
+    if (
+      normalizedEmail &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)
+    ) {
+      return NextResponse.json(
+        { error: "Invalid email address" },
+        { status: 400 }
+      );
+    }
+
+    // Combine duplicate products
+    const productQuantities = new Map<string, number>();
+
+    for (const item of items) {
+      const productId = String(item?.productId ?? "").trim();
+      const quantity = Number(item?.quantity);
+
+      if (
+        !productId ||
+        !Number.isSafeInteger(quantity) ||
+        quantity < 1 ||
+        quantity > 1000
+      ) {
+        return NextResponse.json(
+          { error: "Invalid product or quantity" },
+          { status: 400 }
+        );
+      }
+
+      const nextQuantity =
+        (productQuantities.get(productId) || 0) + quantity;
+
+      if (nextQuantity > 1000) {
+        return NextResponse.json(
+          { error: "Product quantity limit exceeded" },
+          { status: 400 }
+        );
+      }
+
+      productQuantities.set(productId, nextQuantity);
+    }
+
+    const productIds = [...productQuantities.keys()];
+
+    // Fetch products, settings and existing customer
+    const [products, settings, customer] = await Promise.all([
+      prisma.product.findMany({
+        where: { id: { in: productIds } },
+      }),
+      prisma.settings.findFirst(),
+      normalizedEmail
+        ? prisma.customer.findUnique({
+            where: { email: normalizedEmail },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    if (products.length !== productIds.length) {
+      return NextResponse.json(
+        { error: "One or more products do not exist" },
+        { status: 400 }
+      );
+    }
+
+    if (usedCoins > 0 && !customer) {
+      return NextResponse.json(
+        { error: "Customer account is required to use coins" },
+        { status: 400 }
+      );
+    }
+
+    // Calculate subtotal using database prices
+    const productMap = new Map(products.map((p) => [p.id, p]));
+
+    let subtotal = 0;
+
+    const orderItems = productIds.map((productId) => {
+      const product = productMap.get(productId)!;
+      const quantity = productQuantities.get(productId)!;
+      const price = Number(product.salePrice ?? product.price);
+
+      if (!Number.isFinite(price) || price < 0) {
+        throw new Error("INVALID_PRODUCT_PRICE");
+      }
+
+      subtotal += price * quantity;
+
+      return {
+        productId,
+        name: product.name,
+        price,
+        quantity,
+        image: product.image,
+      };
     });
 
-    // 🟢 Email bhejne ke liye (Resend)
-    try {
-      if (customerEmail) {
-        const resend = new Resend(process.env.RESEND_API_KEY);
-        
-        // Verification token generate karo
-        const token = crypto.randomUUID();
+    subtotal = Math.round(subtotal * 100) / 100;
 
-        // Token database mein save karo
-        await prisma.order.update({
-          where: { id: order.id },
-          data: { verificationToken: token },
-        });
+    // Shipping calculation
+    const freeShippingEnabled = settings?.enableFreeShipping ?? true;
+    const freeShippingThreshold = settings?.freeShippingThreshold ?? 5000;
+    const shippingFee = settings?.shippingFee ?? 250;
 
-        // Verification Link banao
-        const verifyLink = `https://sscollection-2iih.vercel.app/verify-order/${token}`;
+    const shipping =
+      freeShippingEnabled && subtotal >= freeShippingThreshold
+        ? 0
+        : shippingFee;
 
-        // Email bhejo
-        await resend.emails.send({
-          from: "S.S Collection <onboarding@resend.dev>",
-          to: customerEmail,
-          subject: `Order Confirmation - ${orderNumber}`,
-          html: generateOrderEmail(orderNumber, customerName, verifyLink, finalTotal),
-        });
-      }
-    } catch (emailError) {
-      console.error("Email sending failed:", emailError);
+    const totalBeforeCoins = subtotal + shipping;
+
+    if (usedCoins > totalBeforeCoins) {
+      return NextResponse.json(
+        { error: "Coins cannot exceed the order total" },
+        { status: 400 }
+      );
     }
 
-    return NextResponse.json({ order }, { status: 201 });
+    const finalTotal =
+      Math.round((totalBeforeCoins - usedCoins) * 100) / 100;
+
+    const coinsEarned = Math.round(finalTotal * 0.03 * 100) / 100;
+
+    // Generate order number
+    const orderNumber = `SS-${new Date().getFullYear()}-${randomUUID()
+      .replace(/-/g, "")
+      .slice(0, 12)
+      .toUpperCase()}`;
+
+    const verificationToken = normalizedEmail ? randomUUID() : null;
+
+    // Reuse valid browser history token or generate a new one
+    const cookieHeader = request.headers.get("cookie") || "";
+
+    const existingCookie = cookieHeader
+      .split(";")
+      .map((part) => part.trim())
+      .find((part) => part.startsWith(`${HISTORY_COOKIE}=`));
+
+    let historyToken: string | null = null;
+
+    if (existingCookie) {
+      try {
+        const existingToken = decodeURIComponent(
+          existingCookie.slice(HISTORY_COOKIE.length + 1)
+        );
+
+        if (/^[a-f0-9]{64}$/i.test(existingToken)) {
+          historyToken = existingToken;
+        }
+      } catch {
+        historyToken = null;
+      }
+    }
+
+    if (!historyToken) {
+      historyToken = randomBytes(32).toString("hex");
+    }
+
+    // Create order and update customer coins in transaction
+    const order = await prisma.$transaction(
+      async (tx) => {
+        if (customer) {
+          const update = await tx.customer.updateMany({
+            where: {
+              id: customer.id,
+              ...(usedCoins > 0
+                ? { coins: { gte: usedCoins } }
+                : {}),
+            },
+            data: {
+              ...(usedCoins > 0
+                ? { coins: { decrement: usedCoins } }
+                : {}),
+              hasOrdered: true,
+            },
+          });
+
+          if (update.count !== 1) {
+            throw new Error(
+              usedCoins > 0
+                ? "NOT_ENOUGH_COINS"
+                : "CUSTOMER_UPDATE_FAILED"
+            );
+          }
+        }
+
+        return tx.order.create({
+          data: {
+            orderNumber,
+            customerName: customerName.trim(),
+            customerPhone: customerPhone.trim(),
+            customerAddress: customerAddress.trim(),
+            customerEmail: normalizedEmail,
+            notes:
+              typeof notes === "string" && notes.trim()
+                ? notes.trim()
+                : null,
+
+            subtotal,
+            shipping,
+            total: finalTotal,
+
+            coinsUsed: usedCoins,
+            coinsEarned,
+
+            status: "PENDING",
+            paymentMethod: "COD",
+
+            customerId: customer?.id ?? null,
+            verificationToken,
+
+            // Save history token directly on this order
+            historyToken,
+
+            items: {
+              create: orderItems,
+            },
+          },
+          include: {
+            items: true,
+          },
+        });
+      },
+      {
+        maxWait: 10000,
+        timeout: 15000,
+      }
+    );
+
+    // Send order email after successful order creation
+    if (
+      normalizedEmail &&
+      verificationToken &&
+      process.env.RESEND_API_KEY
+    ) {
+      try {
+        const resend = new Resend(process.env.RESEND_API_KEY);
+
+        const baseUrl = (
+          process.env.NEXT_PUBLIC_BASE_URL ||
+          "https://sscollection.online"
+        ).replace(/\/$/, "");
+
+        const verifyLink =
+          `${baseUrl}/verify-order/${verificationToken}`;
+
+        await resend.emails.send({
+          from: "S.S Collection <onboarding@resend.dev>",
+          to: normalizedEmail,
+          subject: `Order Confirmation - ${orderNumber}`,
+          html: generateOrderEmail(
+            orderNumber,
+            customerName.trim(),
+            verifyLink,
+            order.total
+          ),
+        });
+      } catch (emailError) {
+        console.error(
+          "Order email sending failed:",
+          emailError
+        );
+      }
+    }
+
+    // Set private history cookie
+    const response = NextResponse.json(
+      {
+        success: true,
+        order,
+      },
+      { status: 201 }
+    );
+
+    response.cookies.set(HISTORY_COOKIE, historyToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: HISTORY_COOKIE_MAX_AGE,
+    });
+
+    return response;
   } catch (error) {
-    console.error("POST /api/orders error:", error);
+    console.error("POST /api/orders:", error);
+
+    const message =
+      error instanceof Error ? error.message : "";
+
+    const errors: Record<string, string> = {
+      INVALID_PRODUCT_PRICE: "Invalid product price",
+      NOT_ENOUGH_COINS: "Not enough coins available",
+      CUSTOMER_UPDATE_FAILED: "Customer account could not be updated",
+    };
+
     return NextResponse.json(
-      { error: "Failed to create order" },
-      { status: 500 }
+      {
+        error: errors[message] || "Failed to create order",
+      },
+      {
+        status: errors[message] ? 400 : 500,
+      }
     );
   }
 }

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Suspense } from "react";
@@ -11,7 +12,9 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
   return (
     <>
       {!isAdmin && <TopBar />}
-      <main>{children}</main>
+      <main className={isAdmin ? "site-main admin-site-main" : "site-main"}>
+        {children}
+      </main>
     </>
   );
 }
@@ -22,7 +25,7 @@ export default function ClientLayout({
   children: React.ReactNode;
 }) {
   return (
-    <Suspense fallback={<>{children}</>}>
+    <Suspense fallback={<main className="site-main">{children}</main>}>
       <LayoutContent>{children}</LayoutContent>
     </Suspense>
   );

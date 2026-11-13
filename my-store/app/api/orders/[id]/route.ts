@@ -1,132 +1,245 @@
+
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-// GET /api/orders/[id] — ek order ki poori details
+type RouteContext = {
+  params: Promise<{ id: string }>;
+};
+
+const ALLOWED_STATUSES = [
+  "PENDING",
+  "CONFIRMED",
+  "PROCESSING",
+  "SHIPPED",
+  "DELIVERED",
+  "CANCELLED",
+];
+
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: RouteContext
 ) {
   try {
     const { id } = await params;
+
+    if (!id) {
+      return NextResponse.json(
+        { error: "Order ID is required" },
+        { status: 400 }
+      );
+    }
+
     const order = await prisma.order.findUnique({
       where: { id },
       include: {
         items: true,
-        customer: true, 
+        customer: true,
       },
     });
-    if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+
+    if (!order) {
+      return NextResponse.json(
+        { error: "Order not found" },
+        { status: 404 }
+      );
+    }
+
     return NextResponse.json({ order });
   } catch (error) {
-    return NextResponse.json({ error: "Failed to fetch order" }, { status: 500 });
+    console.error("GET /api/orders/[id] error:", error);
+
+    return NextResponse.json(
+      { error: "Failed to fetch order" },
+      { status: 500 }
+    );
   }
 }
 
-// PUT /api/orders/[id] — order ka status update karo aur Coins do
 export async function PUT(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: RouteContext
 ) {
   try {
     const { id } = await params;
     const body = await request.json();
+
     const { status, notes } = body;
 
-    const existing = await prisma.order.findUnique({ 
-      where: { id },
-      include: { customer: true } 
-    });
-
-    if (!existing) {
-      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    if (
+      status !== undefined &&
+      (typeof status !== "string" ||
+        !ALLOWED_STATUSES.includes(status))
+    ) {
+      return NextResponse.json(
+        { error: "Invalid order status" },
+        { status: 400 }
+      );
     }
 
-    // Order update karo
-    const order = await prisma.order.update({
-      where: { id },
-      data: {
-        status: status ? String(status) : undefined,
-        notes: notes !== undefined ? String(notes) : undefined,
-      },
-      include: { items: true },
-    });
+    if (
+      notes !== undefined &&
+      notes !== null &&
+      typeof notes !== "string"
+    ) {
+      return NextResponse.json(
+        { error: "Invalid notes" },
+        { status: 400 }
+      );
+    }
 
-    // 🟢 COINS LOGIC: Agar status DELIVERED ho gaya hai
-    if (status === "DELIVERED" && existing.status !== "DELIVERED" && existing.customerId) {
-      
-      const customerId = existing.customerId;
-      const orderTotal = existing.total;
-
-      // 1. Customer ko 3% Coins do
-      const coinsEarned = orderTotal * 0.03;
-      
-      await prisma.customer.update({
-        where: { id: customerId },
-        data: { coins: { increment: coinsEarned } },
+    const result = await prisma.$transaction(async (tx) => {
+      const existing = await tx.order.findUnique({
+        where: { id },
+        include: { customer: true },
       });
 
-      // 2. Referral Logic (Agar customer kisi ke referral se aaya hai)
-      if (existing.customer?.referredBy) {
-        // Check karo ke kya ye us customer ka PEHLA delivered order hai?
-        const previousDeliveredOrders = await prisma.order.count({
+      if (!existing) {
+        throw new Error("ORDER_NOT_FOUND");
+      }
+
+      const newStatus = status ?? existing.status;
+
+      const shouldReward =
+        newStatus === "DELIVERED" &&
+        existing.status !== "DELIVERED" &&
+        existing.customerId !== null;
+
+      let coinsEarned = existing.coinsEarned;
+
+      if (shouldReward) {
+        const customerId = existing.customerId!;
+
+        // Calculate reward from final payable amount
+        coinsEarned =
+          Math.round(existing.total * 0.03 * 100) / 100;
+
+        // Check if this is the customer's first delivered order
+        const previousDeliveredOrders = await tx.order.count({
           where: {
-            customerId: customerId,
+            customerId,
             status: "DELIVERED",
-            id: { not: id }, // Current order ko count mein na lo
+            id: { not: id },
           },
         });
 
-        // Agar ye pehla delivered order hai, to referrer ko Rs. 50 do
-        if (previousDeliveredOrders === 0) {
-          const referrer = await prisma.customer.findUnique({
-            where: { referralCode: existing.customer.referredBy },
+        // Give customer their order reward
+        await tx.customer.update({
+          where: { id: customerId },
+          data: {
+            coins: { increment: coinsEarned },
+          },
+        });
+
+        // Referral reward for first delivered order
+        if (
+          previousDeliveredOrders === 0 &&
+          existing.customer?.referredBy
+        ) {
+          const referralLog = await tx.referralLog.findFirst({
+            where: {
+              referredEmail: existing.customer.email,
+              status: "PENDING",
+            },
           });
 
-          if (referrer) {
-            // Referrer ke coins aur totalReferrals barhao
-            await prisma.customer.update({
-              where: { id: referrer.id },
-              data: {
-                coins: { increment: 50 },
-                totalReferrals: { increment: 1 }, // 👈 Ye line count barhati hai
+          if (referralLog) {
+            const referrer = await tx.customer.findUnique({
+              where: {
+                referralCode: existing.customer.referredBy,
               },
             });
 
-            // ReferralLog ka status COMPLETED kar do
-            await prisma.referralLog.updateMany({
-              where: { referredEmail: existing.customer.email, status: "PENDING" },
-              data: { status: "COMPLETED", coinsAwarded: 50 },
-            });
+            if (referrer) {
+              await tx.customer.update({
+                where: { id: referrer.id },
+                data: {
+                  coins: { increment: 50 },
+                  totalReferrals: { increment: 1 },
+                },
+              });
+
+              await tx.referralLog.updateMany({
+                where: {
+                  referredEmail: existing.customer.email,
+                  status: "PENDING",
+                },
+                data: {
+                  status: "COMPLETED",
+                  coinsAwarded: 50,
+                },
+              });
+            }
           }
         }
       }
 
-      // Order table mein bhi coinsEarned update kar do
-      await prisma.order.update({
+      const order = await tx.order.update({
         where: { id },
-        data: { coinsEarned: coinsEarned },
+        data: {
+          status: newStatus,
+          ...(notes !== undefined
+            ? { notes: notes === null ? null : notes.trim() }
+            : {}),
+          ...(shouldReward ? { coinsEarned } : {}),
+        },
+        include: {
+          items: true,
+        },
       });
+
+      return order;
+    });
+
+    return NextResponse.json({ order: result });
+  } catch (error) {
+    console.error("PUT /api/orders/[id] error:", error);
+
+    if (
+      error instanceof Error &&
+      error.message === "ORDER_NOT_FOUND"
+    ) {
+      return NextResponse.json(
+        { error: "Order not found" },
+        { status: 404 }
+      );
     }
 
-    return NextResponse.json({ order });
-  } catch (error) {
-      console.error("PUT /api/orders/[id] error:", error);
-      return NextResponse.json({ error: "Failed to update order" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to update order" },
+      { status: 500 }
+    );
   }
 }
 
-// DELETE /api/orders/[id] — order delete karo
 export async function DELETE(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: RouteContext
 ) {
   try {
     const { id } = await params;
-    const existing = await prisma.order.findUnique({ where: { id } });
-    if (!existing) return NextResponse.json({ error: "Order not found" }, { status: 404 });
-    await prisma.order.delete({ where: { id } });
+
+    const existing = await prisma.order.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      return NextResponse.json(
+        { error: "Order not found" },
+        { status: 404 }
+      );
+    }
+
+    await prisma.order.delete({
+      where: { id },
+    });
+
     return NextResponse.json({ success: true });
   } catch (error) {
-    return NextResponse.json({ error: "Failed to delete order" }, { status: 500 });
+    console.error("DELETE /api/orders/[id] error:", error);
+
+    return NextResponse.json(
+      { error: "Failed to delete order" },
+      { status: 500 }
+    );
   }
 }
