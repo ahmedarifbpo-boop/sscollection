@@ -190,12 +190,23 @@ export async function POST(request: Request) {
     subtotal = Math.round(subtotal * 100) / 100;
 
     // Shipping calculation
-    const freeShippingEnabled = settings?.enableFreeShipping ?? true;
-    const freeShippingThreshold = settings?.freeShippingThreshold ?? 5000;
-    const shippingFee = settings?.shippingFee ?? 250;
+    // Free shipping is OFF unless admin explicitly enables it.
+    const freeShippingEnabled =
+      settings?.enableFreeShipping === true;
+
+    const freeShippingThreshold =
+      settings?.freeShippingThreshold != null
+        ? Number(settings.freeShippingThreshold)
+        : null;
+
+    const shippingFee = Number(settings?.shippingFee ?? 250);
 
     const shipping =
-      freeShippingEnabled && subtotal >= freeShippingThreshold
+      freeShippingEnabled &&
+      freeShippingThreshold !== null &&
+      Number.isFinite(freeShippingThreshold) &&
+      freeShippingThreshold >= 0 &&
+      subtotal >= freeShippingThreshold
         ? 0
         : shippingFee;
 

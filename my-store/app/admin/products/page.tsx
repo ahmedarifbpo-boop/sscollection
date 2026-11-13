@@ -26,6 +26,7 @@ interface Product {
   video?: string | null;
   rating?: number;
   reviews?: number;
+  isManuallyOutOfStock: boolean;
 }
 
 export default function AdminProductsPage() {
@@ -36,6 +37,7 @@ export default function AdminProductsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
 
   // Verify admin session
@@ -126,7 +128,7 @@ export default function AdminProductsPage() {
 
   // Delete product
   const handleDelete = async (id: string, name: string) => {
-    if (deletingId) return;
+    if (deletingId || togglingId) return;
 
     const confirmed = window.confirm(
       `Delete "${name}"? Ye database se permanently delete ho jayega.`
@@ -184,6 +186,66 @@ export default function AdminProductsPage() {
       );
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  // Manual Out of Stock Toggle
+  const handleStockToggle = async (product: Product) => {
+    if (togglingId || deletingId) return;
+
+    const newValue = !product.isManuallyOutOfStock;
+
+    setTogglingId(product.id);
+    setMessage("");
+
+    try {
+      const res = await fetch(`/api/products/${product.id}`, {
+        method: "PUT",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          isManuallyOutOfStock: newValue,
+        }),
+      });
+
+      if (res.status === 401) {
+        router.replace("/admin/login");
+        return;
+      }
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Stock status update failed");
+      }
+
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.id === product.id
+            ? {
+                ...p,
+                isManuallyOutOfStock:
+                  data.product.isManuallyOutOfStock,
+              }
+            : p
+        )
+      );
+
+      setMessage(
+        newValue
+          ? `"${product.name}" manually marked Out of Stock.`
+          : `"${product.name}" is no longer manually Out of Stock.`
+      );
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Stock status update failed."
+      );
+    } finally {
+      setTogglingId(null);
     }
   };
 
@@ -329,7 +391,7 @@ export default function AdminProductsPage() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "60px 2fr 1fr 1fr 80px 120px",
+                gridTemplateColumns: "60px 2fr 1fr 1fr 130px 120px",
                 gap: "12px",
                 padding: "12px 16px",
                 background: "var(--bg-alt)",
@@ -344,7 +406,7 @@ export default function AdminProductsPage() {
               <div>Product</div>
               <div>Category</div>
               <div>Price</div>
-              <div>Stock</div>
+              <div>Stock Status</div>
               <div style={{ textAlign: "right" }}>Actions</div>
             </div>
 
@@ -359,12 +421,15 @@ export default function AdminProductsPage() {
 
               const mainImage = p.image || p.images?.[0] || "";
 
+              const isOutOfStock =
+                p.stock <= 0 || p.isManuallyOutOfStock;
+
               return (
                 <div
                   key={p.id}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "60px 2fr 1fr 1fr 80px 120px",
+                    gridTemplateColumns: "60px 2fr 1fr 1fr 130px 120px",
                     gap: "12px",
                     padding: "12px 16px",
                     borderBottom: "1px solid var(--border)",
@@ -519,17 +584,45 @@ export default function AdminProductsPage() {
                     )}
                   </div>
 
-                  {/* Stock */}
-                  <div
-                    style={{
-                      fontSize: "12px",
-                      color: p.stock > 0 ? "#2ECC71" : "#E74C3C",
-                      fontWeight: "500",
-                    }}
-                  >
-                    {p.stock > 0
-                      ? `${p.stock} in stock`
-                      : "Out of stock"}
+                  {/* Stock Status + Manual Toggle */}
+                  <div>
+                    <div
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: "600",
+                        color: isOutOfStock ? "#E74C3C" : "#2ECC71",
+                        marginBottom: "8px",
+                      }}
+                    >
+                      {p.stock <= 0
+                        ? "Out of Stock (Zero)"
+                        : p.isManuallyOutOfStock
+                          ? "Out of Stock (Manual)"
+                          : `${p.stock} in stock`}
+                    </div>
+
+                    <label
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        fontSize: "10px",
+                        color: "var(--text-secondary)",
+                        cursor: togglingId === p.id ? "wait" : "pointer",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={!!p.isManuallyOutOfStock}
+                        onChange={() => handleStockToggle(p)}
+                        disabled={
+                          togglingId !== null || deletingId !== null
+                        }
+                      />
+                      {togglingId === p.id
+                        ? "Updating..."
+                        : "Manual Out of Stock"}
+                    </label>
                   </div>
 
                   {/* Actions */}
@@ -561,7 +654,9 @@ export default function AdminProductsPage() {
 
                     <button
                       onClick={() => handleDelete(p.id, p.name)}
-                      disabled={deletingId !== null}
+                      disabled={
+                        deletingId !== null || togglingId !== null
+                      }
                       title="Delete product"
                       style={{
                         width: "32px",
@@ -573,10 +668,11 @@ export default function AdminProductsPage() {
                         alignItems: "center",
                         justifyContent: "center",
                         color: "#E74C3C",
-                        cursor: deletingId
-                          ? "not-allowed"
-                          : "pointer",
-                        opacity: deletingId ? 0.5 : 1,
+                        cursor:
+                          deletingId || togglingId
+                            ? "not-allowed"
+                            : "pointer",
+                        opacity: deletingId || togglingId ? 0.5 : 1,
                       }}
                     >
                       {deletingId === p.id ? (

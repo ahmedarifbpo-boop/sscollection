@@ -19,6 +19,7 @@ model Product {
   price       Float
   salePrice   Float?
   stock       Int      @default(0)
+isManuallyOutOfStock   Boolean  @default(false)
 
   image       String   @default("")
   images      String[] @default([])

@@ -27,6 +27,7 @@ interface Product {
   price: number;
   salePrice: number | null;
   stock: number;
+  isManuallyOutOfStock: boolean;
   image: string;
   images?: string[];
   video?: string | null;
@@ -74,19 +75,17 @@ function ProductContent() {
       .then((d) => {
         if (d.settings) {
           setShippingFee(d.settings.shippingFee ?? 250);
-          setFreeThreshold(
-            d.settings.freeShippingThreshold ?? 5000
-          );
-          setEnableFreeShipping(
-            d.settings.enableFreeShipping ?? true
-          );
+          setFreeThreshold(d.settings.freeShippingThreshold ?? 5000);
+          setEnableFreeShipping(d.settings.enableFreeShipping ?? true);
         }
       })
       .catch(console.error);
 
     async function fetchProduct() {
       try {
-        const res = await fetch(`/api/products/${id}`);
+        const res = await fetch(`/api/products/${id}`, {
+          cache: "no-store",
+        });
 
         if (res.status === 404) {
           setNotFound(true);
@@ -107,8 +106,11 @@ function ProductContent() {
 
         setSelectedImage(productImages[0] || prod.image || "");
         setShowVideo(false);
+        setQuantity(1);
 
-        const allRes = await fetch("/api/products");
+        const allRes = await fetch("/api/products", {
+          cache: "no-store",
+        });
 
         if (allRes.ok) {
           const allData = await allRes.json();
@@ -190,7 +192,14 @@ function ProductContent() {
 
   const finalPrice = product.salePrice || product.price;
 
+  // Automatic + Manual Out of Stock
+  const isOutOfStock =
+    product.stock <= 0 || product.isManuallyOutOfStock;
+
+  // Add to Cart
   const handleAddToCart = () => {
+    if (isOutOfStock || quantity > product.stock) return;
+
     for (let i = 0; i < quantity; i++) {
       addToCart({
         id: product.id,
@@ -414,6 +423,34 @@ function ProductContent() {
               {product.name}
             </h1>
 
+            {/* STOCK STATUS */}
+
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "7px 12px",
+                borderRadius: "3px",
+                marginBottom: "14px",
+                background: isOutOfStock ? "#FEE2E2" : "#DCFCE7",
+                color: isOutOfStock ? "#B91C1C" : "#15803D",
+                fontSize: "12px",
+                fontWeight: "600",
+              }}
+            >
+              <span
+                style={{
+                  width: "7px",
+                  height: "7px",
+                  borderRadius: "50%",
+                  background: isOutOfStock ? "#DC2626" : "#16A34A",
+                }}
+              />
+
+              {isOutOfStock ? "Out of Stock" : "In Stock"}
+            </div>
+
             <div
               style={{
                 display: "flex",
@@ -458,6 +495,8 @@ function ProductContent() {
                 ({product.reviews} reviews)
               </span>
             </div>
+
+            {/* PRICE */}
 
             <div
               style={{
@@ -522,6 +561,8 @@ function ProductContent() {
               )}
             </div>
 
+            {/* DESCRIPTION */}
+
             <div style={{ marginBottom: "20px" }}>
               <h2
                 style={{
@@ -545,6 +586,8 @@ function ProductContent() {
               </p>
             </div>
 
+            {/* QUANTITY */}
+
             <div style={{ marginBottom: "20px" }}>
               <label
                 style={{
@@ -565,15 +608,21 @@ function ProductContent() {
                   border: "1px solid var(--border-strong)",
                   borderRadius: "3px",
                   background: "var(--surface)",
+                  opacity: isOutOfStock ? 0.5 : 1,
                 }}
               >
                 <button
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                  disabled={isOutOfStock || quantity <= 1}
                   style={{
                     padding: "10px 14px",
                     background: "transparent",
                     border: "none",
                     color: "var(--text-secondary)",
+                    cursor:
+                      isOutOfStock || quantity <= 1
+                        ? "not-allowed"
+                        : "pointer",
                   }}
                 >
                   <Minus size={16} />
@@ -591,21 +640,43 @@ function ProductContent() {
                 </span>
 
                 <button
-                  onClick={() => setQuantity(quantity + 1)}
+                  onClick={() =>
+                    setQuantity(Math.min(product.stock, quantity + 1))
+                  }
+                  disabled={isOutOfStock || quantity >= product.stock}
                   style={{
                     padding: "10px 14px",
                     background: "transparent",
                     border: "none",
                     color: "var(--text-secondary)",
+                    cursor:
+                      isOutOfStock || quantity >= product.stock
+                        ? "not-allowed"
+                        : "pointer",
                   }}
                 >
                   <Plus size={16} />
                 </button>
               </div>
+
+              {isOutOfStock && (
+                <p
+                  style={{
+                    fontSize: "12px",
+                    color: "#DC2626",
+                    marginTop: "8px",
+                  }}
+                >
+                  This product is currently unavailable.
+                </p>
+              )}
             </div>
+
+            {/* ADD TO CART */}
 
             <button
               onClick={handleAddToCart}
+              disabled={isOutOfStock || added}
               className="dz-btn-primary"
               style={{
                 width: "100%",
@@ -616,9 +687,14 @@ function ProductContent() {
                 justifyContent: "center",
                 gap: "8px",
                 marginBottom: "16px",
+                opacity: isOutOfStock ? 0.55 : 1,
+                cursor: isOutOfStock ? "not-allowed" : "pointer",
+                background: isOutOfStock ? "#777" : undefined,
               }}
             >
-              {added ? (
+              {isOutOfStock ? (
+                "Out of Stock"
+              ) : added ? (
                 <>
                   <Check size={18} /> Added to Cart!
                 </>
@@ -630,6 +706,8 @@ function ProductContent() {
                 </>
               )}
             </button>
+
+            {/* DELIVERY FEATURES */}
 
             <div
               style={{
@@ -698,6 +776,8 @@ function ProductContent() {
                 </div>
               </div>
             </div>
+
+            {/* SHIPPING */}
 
             <div
               style={{
@@ -1003,6 +1083,7 @@ function ProductContent() {
                       aspectRatio: "1 / 1",
                       overflow: "hidden",
                       background: "var(--bg-alt)",
+                      position: "relative",
                     }}
                   >
                     <img
@@ -1014,6 +1095,24 @@ function ProductContent() {
                         objectFit: "cover",
                       }}
                     />
+
+                    {(p.stock <= 0 || p.isManuallyOutOfStock) && (
+                      <span
+                        style={{
+                          position: "absolute",
+                          bottom: "8px",
+                          left: "8px",
+                          background: "#DC2626",
+                          color: "#fff",
+                          fontSize: "10px",
+                          fontWeight: "600",
+                          padding: "5px 8px",
+                          borderRadius: "3px",
+                        }}
+                      >
+                        Out of Stock
+                      </span>
+                    )}
                   </div>
 
                   <div style={{ padding: "10px" }}>

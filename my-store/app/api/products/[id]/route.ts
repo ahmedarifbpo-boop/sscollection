@@ -22,7 +22,14 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ product });
+    return NextResponse.json(
+      { product },
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      }
+    );
   } catch (error) {
     console.error("GET /api/products/[id] error:", error);
 
@@ -57,10 +64,14 @@ export async function PUT(
       salePrice,
       stock,
       image,
+      images,
+      video,
+      isManuallyOutOfStock,
     } = body;
 
-    // Check karo ke product exist karta hai
-    const existing = await prisma.product.findUnique({ where: { id } });
+    const existing = await prisma.product.findUnique({
+      where: { id },
+    });
 
     if (!existing) {
       return NextResponse.json(
@@ -69,21 +80,98 @@ export async function PUT(
       );
     }
 
+    if (
+      isManuallyOutOfStock !== undefined &&
+      typeof isManuallyOutOfStock !== "boolean"
+    ) {
+      return NextResponse.json(
+        { error: "isManuallyOutOfStock must be a boolean" },
+        { status: 400 }
+      );
+    }
+
+    let updatedImages: string[] | undefined;
+    let updatedImage: string | undefined;
+
+    // Agar images array bheja gaya hai to usay complete gallery samjho
+    if (images !== undefined) {
+      if (!Array.isArray(images)) {
+        return NextResponse.json(
+          { error: "Images must be an array" },
+          { status: 400 }
+        );
+      }
+
+      updatedImages = images
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim())
+        .filter(Boolean);
+
+      updatedImage = updatedImages[0] || "";
+    } else if (image !== undefined) {
+      updatedImage = String(image).trim();
+
+      updatedImages = existing.images.length > 0
+        ? updatedImage
+          ? [updatedImage, ...existing.images.slice(1)]
+          : existing.images.slice(1)
+        : updatedImage
+          ? [updatedImage]
+          : [];
+    }
+
     const product = await prisma.product.update({
       where: { id },
       data: {
-        name: name ? String(name).trim() : undefined,
-        description: description ? String(description).trim() : undefined,
-        category: category ? String(category).trim() : undefined,
-        price: price !== undefined ? Number(price) : undefined,
+        name:
+          name !== undefined
+            ? String(name).trim()
+            : undefined,
+
+        description:
+          description !== undefined
+            ? String(description).trim()
+            : undefined,
+
+        category:
+          category !== undefined
+            ? String(category).trim()
+            : undefined,
+
+        price:
+          price !== undefined
+            ? Number(price)
+            : undefined,
+
         salePrice:
           salePrice === null || salePrice === ""
             ? null
             : salePrice !== undefined
               ? Number(salePrice)
               : undefined,
-        stock: stock !== undefined ? Number(stock) : undefined,
-        image: image ? String(image).trim() : undefined,
+
+        stock:
+          stock !== undefined
+            ? Number(stock)
+            : undefined,
+
+        // Manual Out of Stock toggle
+        isManuallyOutOfStock:
+          typeof isManuallyOutOfStock === "boolean"
+            ? isManuallyOutOfStock
+            : undefined,
+
+        // Main image aur gallery synchronize rahengi
+        image: updatedImage,
+        images: updatedImages,
+
+        // null ya empty string video remove karega
+        video:
+          video === null || video === ""
+            ? null
+            : video !== undefined
+              ? String(video).trim()
+              : undefined,
       },
     });
 
@@ -113,7 +201,9 @@ export async function DELETE(
 
     const { id } = await params;
 
-    const existing = await prisma.product.findUnique({ where: { id } });
+    const existing = await prisma.product.findUnique({
+      where: { id },
+    });
 
     if (!existing) {
       return NextResponse.json(
