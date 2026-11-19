@@ -109,6 +109,7 @@ export async function PUT(
       images,
       video,
       isManuallyOutOfStock,
+      rating,
     } = body;
 
     const existing = await prisma.product.findUnique({
@@ -128,6 +129,26 @@ export async function PUT(
     ) {
       return NextResponse.json(
         { error: "isManuallyOutOfStock must be a boolean" },
+        { status: 400 }
+      );
+    }
+
+    // Validate rating
+    const updatedRating =
+      rating === undefined
+        ? existing.rating
+        : Number(rating);
+
+    if (
+      !Number.isFinite(updatedRating) ||
+      updatedRating < 0 ||
+      updatedRating > 5 ||
+      updatedRating * 2 !== Math.round(updatedRating * 2)
+    ) {
+      return NextResponse.json(
+        {
+          error: "Rating must be between 0 and 5 in increments of 0.5",
+        },
         { status: 400 }
       );
     }
@@ -315,6 +336,11 @@ export async function PUT(
         stock:
           stock !== undefined
             ? updatedStock
+            : undefined,
+
+        rating:
+          rating !== undefined
+            ? updatedRating
             : undefined,
 
         isManuallyOutOfStock:

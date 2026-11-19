@@ -12,6 +12,7 @@ import {
   Loader2,
   X,
   Video,
+  Star,
 } from "lucide-react";
 
 export default function EditProductPage() {
@@ -43,6 +44,7 @@ export default function EditProductPage() {
     salePrice: "",
     costPrice: "",
     stock: "",
+    rating: "0",
   });
 
   const uploading = uploadingImages || uploadingVideo;
@@ -121,6 +123,7 @@ export default function EditProductPage() {
           costPrice:
             p.costPrice != null ? String(p.costPrice) : "0",
           stock: p.stock != null ? String(p.stock) : "",
+          rating: p.rating != null ? String(p.rating) : "0",
         });
 
         const existingImages =
@@ -290,6 +293,7 @@ export default function EditProductPage() {
     const costPrice = Number(form.costPrice);
     const salePrice = form.salePrice ? Number(form.salePrice) : null;
     const stock = Number(form.stock);
+    const rating = Number(form.rating);
 
     if (!Number.isFinite(price) || price <= 0) {
       setError("Please enter a valid selling price");
@@ -313,6 +317,16 @@ export default function EditProductPage() {
 
     if (!Number.isSafeInteger(stock) || stock < 0) {
       setError("Please enter a valid stock quantity");
+      return;
+    }
+
+    if (
+      !Number.isFinite(rating) ||
+      rating < 0 ||
+      rating > 5 ||
+      rating * 2 !== Math.round(rating * 2)
+    ) {
+      setError("Rating must be between 0 and 5 in increments of 0.5");
       return;
     }
 
@@ -341,6 +355,7 @@ export default function EditProductPage() {
           salePrice,
           costPrice,
           stock,
+          rating,
           image: images[0] || "",
           images,
           video: video || null,
@@ -561,6 +576,109 @@ export default function EditProductPage() {
           Actual purchase cost sirf Admin ke profit calculation ke liye hai.
           Customers ko ye information nahi dikhayi jayegi.
         </p>
+
+        {/* Admin Product Rating */}
+        <div
+          style={{
+            marginBottom: "24px",
+            padding: "16px",
+            border: "1px solid var(--border)",
+            borderRadius: "6px",
+            background: "var(--bg-alt)",
+          }}
+        >
+          <label style={labelStyle}>Product Rating (Admin Controlled)</label>
+
+          <select
+            value={form.rating}
+            onChange={(e) => update("rating", e.target.value)}
+            className="dz-input"
+            style={{ maxWidth: "220px" }}
+          >
+            {Array.from({ length: 11 }, (_, index) => {
+              const value = index * 0.5;
+
+              return (
+                <option key={value} value={String(value)}>
+                  {value.toFixed(1)} / 5
+                </option>
+              );
+            })}
+          </select>
+
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              marginTop: "12px",
+            }}
+          >
+            {[1, 2, 3, 4, 5].map((star) => {
+              const rating = Number(form.rating);
+              const fillPercentage = Math.max(
+                0,
+                Math.min(100, (rating - star + 1) * 100)
+              );
+
+              return (
+                <span
+                  key={star}
+                  style={{
+                    position: "relative",
+                    display: "inline-flex",
+                    width: "22px",
+                    height: "22px",
+                  }}
+                >
+                  <Star
+                    size={22}
+                    color="#F59E0B"
+                    fill="none"
+                    strokeWidth={1.8}
+                  />
+                  <span
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      width: `${fillPercentage}%`,
+                      overflow: "hidden",
+                    }}
+                  >
+                    <Star
+                      size={22}
+                      color="#F59E0B"
+                      fill="#F59E0B"
+                      strokeWidth={1.8}
+                    />
+                  </span>
+                </span>
+              );
+            })}
+
+            <span
+              style={{
+                marginLeft: "8px",
+                fontSize: "13px",
+                fontWeight: "600",
+                color: "var(--text-primary)",
+              }}
+            >
+              {Number(form.rating).toFixed(1)} / 5
+            </span>
+          </div>
+
+          <p
+            style={{
+              fontSize: "11px",
+              color: "var(--text-muted)",
+              marginTop: "8px",
+            }}
+          >
+            Ye rating sirf Admin change kar sakta hai. Customers is rating ko
+            directly change nahi kar sakte.
+          </p>
+        </div>
 
         <div style={{ marginBottom: "24px" }}>
           <label style={labelStyle}>Stock Quantity *</label>

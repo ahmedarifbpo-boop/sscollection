@@ -86,6 +86,7 @@ export async function POST(request: Request) {
       image,
       images,
       video,
+      rating,
     } = body;
 
     // Required fields
@@ -103,6 +104,26 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error: "Name, description, category and price are required",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Validate rating
+    const productRating =
+      rating === undefined || rating === null || rating === ""
+        ? 0
+        : Number(rating);
+
+    if (
+      !Number.isFinite(productRating) ||
+      productRating < 0 ||
+      productRating > 5 ||
+      productRating * 2 !== Math.round(productRating * 2)
+    ) {
+      return NextResponse.json(
+        {
+          error: "Rating must be between 0 and 5 in increments of 0.5",
         },
         { status: 400 }
       );
@@ -242,7 +263,7 @@ export async function POST(request: Request) {
         image: mainImage,
         images: productImages,
         video: productVideo,
-        rating: 0,
+        rating: productRating,
         reviews: 0,
       },
     });

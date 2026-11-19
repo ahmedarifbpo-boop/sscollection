@@ -44,6 +44,63 @@ interface Review {
   createdAt: string;
 }
 
+// Reusable half-star rating display
+function RatingStars({
+  rating,
+  size = 14,
+}: {
+  rating: number;
+  size?: number;
+}) {
+  const safeRating = Math.max(0, Math.min(5, Number(rating) || 0));
+
+  return (
+    <div style={{ display: "inline-flex", alignItems: "center", gap: "2px" }}>
+      {[1, 2, 3, 4, 5].map((star) => {
+        const fillPercentage = Math.max(
+          0,
+          Math.min(100, (safeRating - star + 1) * 100)
+        );
+
+        return (
+          <span
+            key={star}
+            style={{
+              position: "relative",
+              display: "inline-flex",
+              width: size,
+              height: size,
+            }}
+          >
+            <Star
+              size={size}
+              color="#FFB800"
+              fill="none"
+              strokeWidth={1.8}
+            />
+
+            <span
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: `${fillPercentage}%`,
+                overflow: "hidden",
+              }}
+            >
+              <Star
+                size={size}
+                color="#FFB800"
+                fill="#FFB800"
+                strokeWidth={1.8}
+              />
+            </span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 function ProductContent() {
   const params = useParams();
   const id = params.id as string;
@@ -451,6 +508,8 @@ function ProductContent() {
               {isOutOfStock ? "Out of Stock" : "In Stock"}
             </div>
 
+            {/* PRODUCT RATING */}
+
             <div
               style={{
                 display: "flex",
@@ -461,21 +520,7 @@ function ProductContent() {
                 borderBottom: "1px solid var(--border)",
               }}
             >
-              <div style={{ display: "flex", gap: "2px" }}>
-                {[1, 2, 3, 4, 5].map((s) => (
-                  <Star
-                    key={s}
-                    size={14}
-                    style={{
-                      fill:
-                        s <= Math.round(product.rating)
-                          ? "#FFB800"
-                          : "transparent",
-                      color: "#FFB800",
-                    }}
-                  />
-                ))}
-              </div>
+              <RatingStars rating={product.rating} size={16} />
 
               <span
                 style={{
@@ -1126,6 +1171,26 @@ function ProductContent() {
                     >
                       {p.name}
                     </h3>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "5px",
+                        marginBottom: "7px",
+                      }}
+                    >
+                      <RatingStars rating={p.rating} size={12} />
+
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          color: "var(--text-muted)",
+                        }}
+                      >
+                        {Number(p.rating || 0).toFixed(1)}
+                      </span>
+                    </div>
 
                     <span
                       style={{

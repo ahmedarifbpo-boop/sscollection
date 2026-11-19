@@ -1,6 +1,8 @@
 
 import HomeClient from "./HomeClient";
 
+export const dynamic = "force-dynamic";
+
 async function getData() {
   try {
     const baseUrl =

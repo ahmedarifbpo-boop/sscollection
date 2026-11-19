@@ -13,6 +13,7 @@ import {
   X,
   Image as ImageIcon,
   Video,
+  Star,
 } from "lucide-react";
 
 interface Category {
@@ -42,12 +43,12 @@ export default function AddProductPage() {
     salePrice: "",
     costPrice: "",
     stock: "",
+    rating: "0",
   });
 
   const [images, setImages] = useState<string[]>([]);
   const [video, setVideo] = useState("");
 
-  // Verify admin session and load categories
   useEffect(() => {
     let active = true;
 
@@ -120,7 +121,6 @@ export default function AddProductPage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  // Upload multiple images
   const handleImageUpload = async (
     e: ChangeEvent<HTMLInputElement>
   ) => {
@@ -194,7 +194,6 @@ export default function AddProductPage() {
     }
   };
 
-  // Upload optional video
   const handleVideoUpload = async (
     e: ChangeEvent<HTMLInputElement>
   ) => {
@@ -256,7 +255,6 @@ export default function AddProductPage() {
     setVideo("");
   };
 
-  // Save product
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -283,6 +281,7 @@ export default function AddProductPage() {
       ? Number(form.salePrice)
       : null;
     const productStock = Number(form.stock);
+    const productRating = Number(form.rating);
 
     if (
       form.price === "" ||
@@ -321,6 +320,16 @@ export default function AddProductPage() {
       return;
     }
 
+    if (
+      !Number.isFinite(productRating) ||
+      productRating < 0 ||
+      productRating > 5 ||
+      Math.round(productRating * 2) !== productRating * 2
+    ) {
+      setError("Rating 0 se 5 tak select karo (0.5 increments)");
+      return;
+    }
+
     if (uploadingImages || uploadingVideo) {
       setError("Pehle uploads complete hone do");
       return;
@@ -343,6 +352,7 @@ export default function AddProductPage() {
           salePrice: productSalePrice,
           costPrice: productCostPrice,
           stock: productStock,
+          rating: productRating,
           images,
           image: images[0] || "",
           video: video || null,
@@ -459,7 +469,6 @@ export default function AddProductPage() {
           </div>
         )}
 
-        {/* Product Name */}
         <div style={{ marginBottom: "18px" }}>
           <label style={labelStyle}>Product Name *</label>
           <input
@@ -472,7 +481,6 @@ export default function AddProductPage() {
           />
         </div>
 
-        {/* Description */}
         <div style={{ marginBottom: "18px" }}>
           <label style={labelStyle}>Description *</label>
           <textarea
@@ -490,7 +498,6 @@ export default function AddProductPage() {
           />
         </div>
 
-        {/* Category */}
         <div style={{ marginBottom: "18px" }}>
           <label style={labelStyle}>Category *</label>
           <select
@@ -508,7 +515,6 @@ export default function AddProductPage() {
           </select>
         </div>
 
-        {/* Selling Price, Sale Price and Actual Cost */}
         <div
           style={{
             display: "grid",
@@ -574,7 +580,94 @@ export default function AddProductPage() {
           </div>
         </div>
 
-        {/* Stock */}
+        {/* Admin Product Rating */}
+        <div style={{ marginBottom: "18px" }}>
+          <label style={labelStyle}>
+            <Star
+              size={15}
+              style={{
+                display: "inline",
+                verticalAlign: "middle",
+                marginRight: "6px",
+                color: "#F59E0B",
+              }}
+            />
+            Product Rating (0–5 Stars)
+          </label>
+
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "14px",
+              flexWrap: "wrap",
+            }}
+          >
+            <select
+              style={{
+                ...inputStyle,
+                width: "150px",
+              }}
+              value={form.rating}
+              onChange={(e) => update("rating", e.target.value)}
+            >
+              {Array.from({ length: 11 }, (_, i) => i * 0.5).map(
+                (rating) => (
+                  <option key={rating} value={String(rating)}>
+                    {rating.toFixed(1)} / 5
+                  </option>
+                )
+              )}
+            </select>
+
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "3px",
+              }}
+            >
+              {Array.from({ length: 5 }, (_, i) => {
+                const rating = Number(form.rating);
+                const filled = rating >= i + 1;
+                const half = !filled && rating >= i + 0.5;
+
+                return (
+                  <Star
+                    key={i}
+                    size={21}
+                    fill={filled || half ? "#F59E0B" : "none"}
+                    color={
+                      filled || half ? "#F59E0B" : "#CBD5E1"
+                    }
+                    strokeWidth={1.8}
+                  />
+                );
+              })}
+              <span
+                style={{
+                  marginLeft: "6px",
+                  fontSize: "13px",
+                  color: "var(--text-secondary)",
+                }}
+              >
+                {Number(form.rating).toFixed(1)}
+              </span>
+            </div>
+          </div>
+
+          <p
+            style={{
+              fontSize: "11px",
+              color: "var(--text-muted)",
+              marginTop: "6px",
+            }}
+          >
+            Admin manually set karega. Customers is rating ko change
+            nahi kar sakenge.
+          </p>
+        </div>
+
         <div style={{ marginBottom: "24px" }}>
           <label style={labelStyle}>Stock Quantity *</label>
           <input
@@ -589,7 +682,6 @@ export default function AddProductPage() {
           />
         </div>
 
-        {/* Multiple Images */}
         <div
           style={{
             borderTop: "1px solid var(--border)",
@@ -750,7 +842,6 @@ export default function AddProductPage() {
           </p>
         </div>
 
-        {/* Optional Video */}
         <div
           style={{
             borderTop: "1px solid var(--border)",
@@ -858,7 +949,6 @@ export default function AddProductPage() {
           )}
         </div>
 
-        {/* Save */}
         <button
           type="submit"
           disabled={saving || uploadingImages || uploadingVideo}
