@@ -23,6 +23,7 @@ import {
   Coins,
   Star,
   RotateCcw,
+  Receipt,
 } from "lucide-react";
 
 const navItems = [
@@ -32,6 +33,7 @@ const navItems = [
   { label: "Return Requests", href: "/admin/return-requests", icon: RotateCcw },
   { label: "Reviews", href: "/admin/reviews", icon: Star },
   { label: "Sales", href: "/admin/sales", icon: TrendingUp },
+  { label: "Expense & Profit", href: "/admin/expenses", icon: Receipt },
   { label: "Categories", href: "/admin/categories", icon: Tag },
   { label: "Offers", href: "/admin/offers", icon: Sparkles },
   { label: "Referrals", href: "/admin/referrals", icon: Gift },
@@ -79,13 +81,11 @@ function AdminLayoutContent({
 
         if (cancelled) return;
 
-        // Only actual unauthorized session redirects to login.
         if (res.status === 401) {
           router.replace("/admin/login");
           return;
         }
 
-        // Temporary server errors should not log out the admin.
         if (!res.ok) {
           setAuthChecked(true);
           return;
@@ -104,7 +104,6 @@ function AdminLayoutContent({
       } catch (error) {
         console.error("Admin session check error:", error);
 
-        // Network failure should not trigger automatic logout.
         if (!cancelled) {
           setAuthChecked(true);
         }
@@ -144,7 +143,6 @@ function AdminLayoutContent({
           }),
         ]);
 
-        // Notification API errors must never redirect admin to login.
         if (!ordersRes.ok || !chatRes.ok) {
           return;
         }
@@ -168,7 +166,6 @@ function AdminLayoutContent({
           if (!cancelled) {
             setIsRinging(true);
 
-            // Notification sound
             try {
               const audio = new Audio(
                 "https://actions.google.com/sounds/v1/alarms/phone_alerts_and_rings.ogg"
@@ -177,7 +174,6 @@ function AdminLayoutContent({
               audio.play().catch(() => {});
             } catch (error) {}
 
-            // Notification toast
             setToast({
               title: "New Notification!",
               msg: `Aapke paas ${diff} naya update aaya hai`,
@@ -198,7 +194,6 @@ function AdminLayoutContent({
           prevCountRef.current = currentTotal;
         }
       } catch (error) {
-        // Notification errors should not log out the admin.
         console.error("Notification polling error:", error);
       }
     }

@@ -40,6 +40,7 @@ export default function AddProductPage() {
     category: "",
     price: "",
     salePrice: "",
+    costPrice: "",
     stock: "",
   });
 
@@ -276,25 +277,46 @@ export default function AddProductPage() {
       return;
     }
 
-    if (!form.price || Number(form.price) <= 0) {
+    const productPrice = Number(form.price);
+    const productCostPrice = Number(form.costPrice);
+    const productSalePrice = form.salePrice
+      ? Number(form.salePrice)
+      : null;
+    const productStock = Number(form.stock);
+
+    if (
+      form.price === "" ||
+      !Number.isFinite(productPrice) ||
+      productPrice <= 0
+    ) {
       setError("Valid product price enter karo");
       return;
     }
 
-    if (form.salePrice && Number(form.salePrice) < 0) {
-      setError("Sale price valid enter karo");
+    if (
+      form.costPrice === "" ||
+      !Number.isFinite(productCostPrice) ||
+      productCostPrice < 0
+    ) {
+      setError("Valid actual purchase cost enter karo");
       return;
     }
 
     if (
-      form.salePrice &&
-      Number(form.salePrice) > Number(form.price)
+      productSalePrice !== null &&
+      (!Number.isFinite(productSalePrice) ||
+        productSalePrice <= 0 ||
+        productSalePrice >= productPrice)
     ) {
-      setError("Sale price original price se zyada nahi ho sakti");
+      setError("Sale price original price se kam honi chahiye");
       return;
     }
 
-    if (form.stock === "" || Number(form.stock) < 0) {
+    if (
+      form.stock === "" ||
+      !Number.isSafeInteger(productStock) ||
+      productStock < 0
+    ) {
       setError("Valid stock quantity enter karo");
       return;
     }
@@ -317,11 +339,10 @@ export default function AddProductPage() {
           name: form.name.trim(),
           description: form.description.trim(),
           category: form.category,
-          price: Number(form.price),
-          salePrice: form.salePrice
-            ? Number(form.salePrice)
-            : null,
-          stock: Number(form.stock),
+          price: productPrice,
+          salePrice: productSalePrice,
+          costPrice: productCostPrice,
+          stock: productStock,
           images,
           image: images[0] || "",
           video: video || null,
@@ -487,7 +508,7 @@ export default function AddProductPage() {
           </select>
         </div>
 
-        {/* Price and Sale Price */}
+        {/* Selling Price, Sale Price and Actual Cost */}
         <div
           style={{
             display: "grid",
@@ -505,7 +526,7 @@ export default function AddProductPage() {
               step="0.01"
               value={form.price}
               onChange={(e) => update("price", e.target.value)}
-              placeholder="Product price"
+              placeholder="Selling price"
               required
             />
           </div>
@@ -515,7 +536,7 @@ export default function AddProductPage() {
             <input
               style={inputStyle}
               type="number"
-              min="0"
+              min="0.01"
               step="0.01"
               value={form.salePrice}
               onChange={(e) =>
@@ -523,6 +544,33 @@ export default function AddProductPage() {
               }
               placeholder="Optional"
             />
+          </div>
+
+          <div>
+            <label style={labelStyle}>
+              Actual Purchase Cost (Rs.) *
+            </label>
+            <input
+              style={inputStyle}
+              type="number"
+              min="0"
+              step="0.01"
+              value={form.costPrice}
+              onChange={(e) =>
+                update("costPrice", e.target.value)
+              }
+              placeholder="Your actual product cost"
+              required
+            />
+            <p
+              style={{
+                fontSize: "11px",
+                color: "var(--text-muted)",
+                marginTop: "6px",
+              }}
+            >
+              Private field. Customers cannot see this cost.
+            </p>
           </div>
         </div>
 

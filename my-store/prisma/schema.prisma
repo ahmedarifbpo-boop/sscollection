@@ -11,31 +11,32 @@ datasource db {
 // ============ PRODUCTS ============
 
 model Product {
-  id          String   @id @default(cuid())
-  name        String
-  slug        String   @unique
-  description String
-  category    String
-  price       Float
-  salePrice   Float?
-  stock       Int      @default(0)
-isManuallyOutOfStock   Boolean  @default(false)
+  id                   String   @id @default(cuid())
+  name                 String
+  slug                 String   @unique
+  description          String
+  category             String
+  price                Float
+  salePrice            Float?
+  costPrice            Float    @default(0)
+  stock                Int      @default(0)
+  isManuallyOutOfStock Boolean  @default(false)
 
-  image       String   @default("")
-  images      String[] @default([])
-  video       String?
+  image                String   @default("")
+  images               String[] @default([])
+  video                String?
 
-  rating      Float    @default(0)
-  reviews     Int      @default(0)
+  rating               Float    @default(0)
+  reviews              Int      @default(0)
 
-  metaTitle       String?
-  metaDescription String?
+  metaTitle            String?
+  metaDescription      String?
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-  orderItems  OrderItem[]
-  reviewsData Review[]
+  orderItems           OrderItem[]
+  reviewsData          Review[]
 
   @@index([category])
   @@index([slug])
@@ -44,41 +45,43 @@ isManuallyOutOfStock   Boolean  @default(false)
 // ============ ORDERS ============
 
 model Order {
-  id                String   @id @default(cuid())
-  orderNumber       String   @unique
+  id                       String   @id @default(cuid())
+  orderNumber              String   @unique
 
-  customerName      String
-  customerPhone     String
-  customerAddress   String
-  customerEmail     String?
-  notes             String?
+  customerName             String
+  customerPhone            String
+  customerAlternativePhone String?
+  customerAddress          String
+  customerEmail            String?
+  notes                    String?
 
-  subtotal          Float
-  shipping          Float    @default(0)
-  total             Float
+  subtotal                 Float
+  shipping                 Float    @default(0)
+  courierCost              Float    @default(0)
+  total                    Float
 
-  status            String   @default("PENDING")
-  paymentMethod     String   @default("COD")
+  status                   String   @default("PENDING")
+  paymentMethod            String   @default("COD")
 
-  isVerified        Boolean  @default(false)
-  verificationToken String?  @unique
+  isVerified               Boolean  @default(false)
+  allowOpenParcel          Boolean  @default(false)
+  verificationToken        String?  @unique
 
-  reviewToken       String?  @unique
+  reviewToken              String?  @unique
 
-  // Secure customer order history token
-  historyToken      String?  @db.VarChar(128)
+  historyToken             String?  @db.VarChar(128)
 
-  customerId        String?
-  coinsUsed         Float    @default(0)
-  coinsEarned       Float    @default(0)
+  customerId               String?
+  coinsUsed                Float    @default(0)
+  coinsEarned              Float    @default(0)
 
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
 
-  items             OrderItem[]
-  customer          Customer? @relation(fields: [customerId], references: [id])
-  reviews           Review[]
-  returnRequests ReturnRequest[]
+  items                    OrderItem[]
+  customer                 Customer? @relation(fields: [customerId], references: [id])
+  reviews                  Review[]
+  returnRequests           ReturnRequest[]
 
   @@index([status])
   @@index([customerId])
@@ -97,6 +100,7 @@ model OrderItem {
 
   name       String
   price      Float
+  actualCost Float    @default(0)
   quantity   Int
   image      String
 
@@ -204,7 +208,7 @@ model Settings {
   contactPhone           String?
   address                String?
 
-  freeShippingThreshold  Float?    
+  freeShippingThreshold  Float?
   shippingFee            Float    @default(250)
   enableFreeShipping     Boolean  @default(true)
 
@@ -260,7 +264,6 @@ model Customer {
   hasOrdered     Boolean  @default(false)
   canRefer       Boolean  @default(true)
 
-  // Optional customer-level history token
   historyToken   String?  @unique @db.VarChar(128)
 
   createdAt      DateTime @default(now())
@@ -284,7 +287,6 @@ model ReferralLog {
 }
 
 // ============ RETURN REQUESTS ============
-
 
 model ReturnRequest {
   id              String   @id @default(cuid())
@@ -310,4 +312,20 @@ model ReturnRequest {
   @@index([orderId])
   @@index([status])
   @@index([createdAt])
+}
+
+// ============ ADMIN EXPENSE RECORDS ============
+
+model ExpenseRecord {
+  id        String   @id @default(cuid())
+  date      DateTime @default(now())
+  type      String
+  amount    Float
+  note      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
+  @@index([type])
 }

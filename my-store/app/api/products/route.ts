@@ -15,11 +15,31 @@ function createSlug(name: string) {
 }
 
 // GET /api/products
-// Public: customers bhi products dekh sakte hain.
+// Public: Never expose private product cost.
 export async function GET() {
   try {
     const products = await prisma.product.findMany({
       orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        description: true,
+        category: true,
+        price: true,
+        salePrice: true,
+        stock: true,
+        isManuallyOutOfStock: true,
+        image: true,
+        images: true,
+        video: true,
+        rating: true,
+        reviews: true,
+        metaTitle: true,
+        metaDescription: true,
+        createdAt: true,
+        updatedAt: true,
+      },
     });
 
     return NextResponse.json({ products });
@@ -34,10 +54,12 @@ export async function GET() {
 }
 
 // POST /api/products
-// Admin only: product create karne ke liye authentication required.
+// Admin only
 export async function POST(request: Request) {
   try {
-    if (!verifyAdminRequest(request)) {
+    const auth = await verifyAdminRequest(request);
+
+    if (!auth) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
@@ -46,12 +68,20 @@ export async function POST(request: Request) {
 
     const body = await request.json();
 
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json(
+        { error: "Invalid request body" },
+        { status: 400 }
+      );
+    }
+
     const {
       name,
       description,
       category,
       price,
       salePrice,
+      costPrice,
       stock,
       image,
       images,
@@ -99,7 +129,6 @@ export async function POST(request: Request) {
     const singleImage =
       typeof image === "string" ? image.trim() : "";
 
-    // First image becomes main image
     const mainImage = productImages[0] || singleImage || "";
 
     // Validate optional video
@@ -128,6 +157,13 @@ export async function POST(request: Request) {
         ? null
         : Number(salePrice);
 
+    const productCostPrice =
+      costPrice === undefined ||
+      costPrice === null ||
+      costPrice === ""
+        ? 0
+        : Number(costPrice);
+
     const productStock =
       stock === undefined ||
       stock === null ||
@@ -135,15 +171,17 @@ export async function POST(request: Request) {
         ? 0
         : Number(stock);
 
-    // Price and stock validation
+    // Price, cost and stock validation
     if (
       !Number.isFinite(productPrice) ||
       productPrice <= 0 ||
+      !Number.isFinite(productCostPrice) ||
+      productCostPrice < 0 ||
       !Number.isSafeInteger(productStock) ||
       productStock < 0
     ) {
       return NextResponse.json(
-        { error: "Invalid price or stock value" },
+        { error: "Invalid price, cost price or stock value" },
         { status: 400 }
       );
     }
@@ -199,6 +237,7 @@ export async function POST(request: Request) {
         category: category.trim(),
         price: productPrice,
         salePrice: productSalePrice,
+        costPrice: productCostPrice,
         stock: productStock,
         image: mainImage,
         images: productImages,
@@ -208,8 +247,11 @@ export async function POST(request: Request) {
       },
     });
 
+    // Never return private costPrice to public-facing clients.
+    const { costPrice: _privateCostPrice, ...publicProduct } = product;
+
     return NextResponse.json(
-      { product },
+      { product: publicProduct },
       { status: 201 }
     );
   } catch (error) {

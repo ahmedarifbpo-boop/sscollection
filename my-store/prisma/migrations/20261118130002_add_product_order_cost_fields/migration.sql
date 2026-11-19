@@ -1,0 +1,8 @@
+-- AlterTable
+ALTER TABLE "Order" ADD COLUMN     "courierCost" DOUBLE PRECISION NOT NULL DEFAULT 0;
+
+-- AlterTable
+ALTER TABLE "OrderItem" ADD COLUMN     "actualCost" DOUBLE PRECISION NOT NULL DEFAULT 0;
+
+-- AlterTable
+ALTER TABLE "Product" ADD COLUMN     "costPrice" DOUBLE PRECISION NOT NULL DEFAULT 0;

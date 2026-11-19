@@ -11,9 +11,19 @@ export const runtime = "nodejs";
 const HISTORY_COOKIE = "ss-order-history";
 const HISTORY_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
+// Pakistani phone number validation
+const normalizePakistaniPhone = (value: string) =>
+  value.replace(/[\s-]/g, "");
+
+const isValidPakistaniPhone = (value: string) =>
+  /^(03\d{9}|\+923\d{9})$/.test(value);
+
+// GET: Fetch all orders (Admin only)
 export async function GET(request: Request) {
   try {
-    if (!verifyAdminRequest(request)) {
+    const auth = await verifyAdminRequest(request);
+
+    if (!auth) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
@@ -39,6 +49,7 @@ export async function GET(request: Request) {
   }
 }
 
+// POST: Create a new order
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -46,6 +57,7 @@ export async function POST(request: Request) {
     const {
       customerName,
       customerPhone,
+      customerAlternativePhone,
       customerAddress,
       customerEmail,
       notes,
@@ -53,7 +65,7 @@ export async function POST(request: Request) {
       coinsUsed = 0,
     } = body;
 
-    // Validate customer details
+    // Validate required customer details
     if (
       typeof customerName !== "string" ||
       !customerName.trim() ||
@@ -68,6 +80,64 @@ export async function POST(request: Request) {
       );
     }
 
+    // Normalize and validate primary phone
+    const normalizedPhone = normalizePakistaniPhone(
+      customerPhone.trim()
+    );
+
+    if (!isValidPakistaniPhone(normalizedPhone)) {
+      return NextResponse.json(
+        {
+          error:
+            "Invalid phone number. Use 03XXXXXXXXX or +923XXXXXXXXX.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Normalize and validate optional alternative phone
+    let normalizedAlternativePhone: string | null = null;
+
+    if (
+      customerAlternativePhone !== undefined &&
+      customerAlternativePhone !== null &&
+      typeof customerAlternativePhone !== "string"
+    ) {
+      return NextResponse.json(
+        { error: "Invalid alternative phone number" },
+        { status: 400 }
+      );
+    }
+
+    if (
+      typeof customerAlternativePhone === "string" &&
+      customerAlternativePhone.trim()
+    ) {
+      normalizedAlternativePhone = normalizePakistaniPhone(
+        customerAlternativePhone.trim()
+      );
+
+      if (!isValidPakistaniPhone(normalizedAlternativePhone)) {
+        return NextResponse.json(
+          {
+            error:
+              "Invalid alternative phone number. Use 03XXXXXXXXX or +923XXXXXXXXX.",
+          },
+          { status: 400 }
+        );
+      }
+
+      if (normalizedPhone === normalizedAlternativePhone) {
+        return NextResponse.json(
+          {
+            error:
+              "Primary and alternative phone numbers cannot be the same.",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     // Validate order items
     if (!Array.isArray(items) || !items.length || items.length > 50) {
       return NextResponse.json(
@@ -76,6 +146,7 @@ export async function POST(request: Request) {
       );
     }
 
+    // Validate coins
     const usedCoins = Number(coinsUsed);
 
     if (!Number.isFinite(usedCoins) || usedCoins < 0) {
@@ -170,10 +241,16 @@ export async function POST(request: Request) {
     const orderItems = productIds.map((productId) => {
       const product = productMap.get(productId)!;
       const quantity = productQuantities.get(productId)!;
+
       const price = Number(product.salePrice ?? product.price);
+      const actualCost = Number(product.costPrice ?? 0);
 
       if (!Number.isFinite(price) || price < 0) {
         throw new Error("INVALID_PRODUCT_PRICE");
+      }
+
+      if (!Number.isFinite(actualCost) || actualCost < 0) {
+        throw new Error("INVALID_PRODUCT_COST");
       }
 
       subtotal += price * quantity;
@@ -182,6 +259,7 @@ export async function POST(request: Request) {
         productId,
         name: product.name,
         price,
+        actualCost,
         quantity,
         image: product.image,
       };
@@ -190,7 +268,7 @@ export async function POST(request: Request) {
     subtotal = Math.round(subtotal * 100) / 100;
 
     // Shipping calculation
-    // Free shipping is OFF unless admin explicitly enables it.
+    // Customer-paid shipping is separate from courier expense.
     const freeShippingEnabled =
       settings?.enableFreeShipping === true;
 
@@ -292,7 +370,8 @@ export async function POST(request: Request) {
           data: {
             orderNumber,
             customerName: customerName.trim(),
-            customerPhone: customerPhone.trim(),
+            customerPhone: normalizedPhone,
+            customerAlternativePhone: normalizedAlternativePhone,
             customerAddress: customerAddress.trim(),
             customerEmail: normalizedEmail,
             notes:
@@ -304,6 +383,9 @@ export async function POST(request: Request) {
             shipping,
             total: finalTotal,
 
+            // Actual courier cost is entered by admin later.
+            courierCost: 0,
+
             coinsUsed: usedCoins,
             coinsEarned,
 
@@ -313,7 +395,6 @@ export async function POST(request: Request) {
             customerId: customer?.id ?? null,
             verificationToken,
 
-            // Save history token directly on this order
             historyToken,
 
             items: {
@@ -343,7 +424,7 @@ export async function POST(request: Request) {
         const baseUrl = (
           process.env.NEXT_PUBLIC_BASE_URL ||
           "https://sscollection.online"
-        ).replace(/\/$/, "");
+        ).replace(/\/+$/, "");
 
         const verifyLink =
           `${baseUrl}/verify-order/${verificationToken}`;
@@ -367,11 +448,21 @@ export async function POST(request: Request) {
       }
     }
 
+    // Never expose private actualCost to the customer.
+    const { items: savedItems, ...publicOrder } = order;
+
+    const safeOrder = {
+      ...publicOrder,
+      items: savedItems.map(
+        ({ actualCost, ...publicItem }) => publicItem
+      ),
+    };
+
     // Set private history cookie
     const response = NextResponse.json(
       {
         success: true,
-        order,
+        order: safeOrder,
       },
       { status: 201 }
     );
@@ -393,6 +484,7 @@ export async function POST(request: Request) {
 
     const errors: Record<string, string> = {
       INVALID_PRODUCT_PRICE: "Invalid product price",
+      INVALID_PRODUCT_COST: "Invalid product actual cost",
       NOT_ENOUGH_COINS: "Not enough coins available",
       CUSTOMER_UPDATE_FAILED: "Customer account could not be updated",
     };

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useRef } from "react";
@@ -40,6 +41,7 @@ export default function EditProductPage() {
     category: "",
     price: "",
     salePrice: "",
+    costPrice: "",
     stock: "",
   });
 
@@ -116,10 +118,11 @@ export default function EditProductPage() {
           price: p.price != null ? String(p.price) : "",
           salePrice:
             p.salePrice != null ? String(p.salePrice) : "",
+          costPrice:
+            p.costPrice != null ? String(p.costPrice) : "0",
           stock: p.stock != null ? String(p.stock) : "",
         });
 
-        // Purane products ke liye fallback: p.image
         const existingImages =
           Array.isArray(p.images) && p.images.filter(Boolean).length
             ? p.images.filter(Boolean)
@@ -266,6 +269,53 @@ export default function EditProductPage() {
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
+    setError("");
+
+    if (!form.name.trim()) {
+      setError("Product name is required");
+      return;
+    }
+
+    if (!form.description.trim()) {
+      setError("Product description is required");
+      return;
+    }
+
+    if (!form.category) {
+      setError("Please select a category");
+      return;
+    }
+
+    const price = Number(form.price);
+    const costPrice = Number(form.costPrice);
+    const salePrice = form.salePrice ? Number(form.salePrice) : null;
+    const stock = Number(form.stock);
+
+    if (!Number.isFinite(price) || price <= 0) {
+      setError("Please enter a valid selling price");
+      return;
+    }
+
+    if (!Number.isFinite(costPrice) || costPrice < 0) {
+      setError("Please enter a valid actual purchase cost");
+      return;
+    }
+
+    if (
+      salePrice !== null &&
+      (!Number.isFinite(salePrice) ||
+        salePrice <= 0 ||
+        salePrice >= price)
+    ) {
+      setError("Sale price must be positive and less than regular price");
+      return;
+    }
+
+    if (!Number.isSafeInteger(stock) || stock < 0) {
+      setError("Please enter a valid stock quantity");
+      return;
+    }
+
     if (images.length === 0) {
       setError("Please keep at least one product image");
       return;
@@ -277,7 +327,6 @@ export default function EditProductPage() {
     }
 
     setSaving(true);
-    setError("");
 
     try {
       const res = await fetch(`/api/products/${id}`, {
@@ -285,14 +334,13 @@ export default function EditProductPage() {
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: form.name,
-          description: form.description,
+          name: form.name.trim(),
+          description: form.description.trim(),
           category: form.category,
-          price: Number(form.price),
-          salePrice: form.salePrice ? Number(form.salePrice) : null,
-          stock: Number(form.stock),
-
-          // First image is the main product image
+          price,
+          salePrice,
+          costPrice,
+          stock,
           image: images[0] || "",
           images,
           video: video || null,
@@ -453,20 +501,22 @@ export default function EditProductPage() {
           </select>
         </div>
 
+        {/* Selling, Sale and Actual Cost */}
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
             gap: "16px",
             marginBottom: "16px",
           }}
         >
           <div>
-            <label style={labelStyle}>Price (Rs.) *</label>
+            <label style={labelStyle}>Selling Price (Rs.) *</label>
             <input
               type="number"
               required
-              min="0"
+              min="0.01"
+              step="0.01"
               value={form.price}
               onChange={(e) => update("price", e.target.value)}
               className="dz-input"
@@ -474,16 +524,43 @@ export default function EditProductPage() {
           </div>
 
           <div>
-            <label style={labelStyle}>Sale Price (optional)</label>
+            <label style={labelStyle}>Sale Price (Rs.)</label>
             <input
               type="number"
-              min="0"
+              min="0.01"
+              step="0.01"
               value={form.salePrice}
               onChange={(e) => update("salePrice", e.target.value)}
               className="dz-input"
             />
           </div>
+
+          <div>
+            <label style={labelStyle}>Actual Purchase Cost (Rs.) *</label>
+            <input
+              type="number"
+              required
+              min="0"
+              step="0.01"
+              value={form.costPrice}
+              onChange={(e) => update("costPrice", e.target.value)}
+              className="dz-input"
+              placeholder="Your buying cost"
+            />
+          </div>
         </div>
+
+        <p
+          style={{
+            fontSize: "11px",
+            color: "var(--text-muted)",
+            marginTop: "-6px",
+            marginBottom: "20px",
+          }}
+        >
+          Actual purchase cost sirf Admin ke profit calculation ke liye hai.
+          Customers ko ye information nahi dikhayi jayegi.
+        </p>
 
         <div style={{ marginBottom: "24px" }}>
           <label style={labelStyle}>Stock Quantity *</label>
@@ -491,13 +568,14 @@ export default function EditProductPage() {
             type="number"
             required
             min="0"
+            step="1"
             value={form.stock}
             onChange={(e) => update("stock", e.target.value)}
             className="dz-input"
           />
         </div>
 
-        {/* MULTIPLE PRODUCT IMAGES */}
+        {/* Multiple Product Images */}
         <div style={{ marginBottom: "28px" }}>
           <label style={labelStyle}>Product Images *</label>
 
@@ -620,7 +698,7 @@ export default function EditProductPage() {
           </p>
         </div>
 
-        {/* PRODUCT VIDEO */}
+        {/* Product Video */}
         <div style={{ marginBottom: "28px" }}>
           <label style={labelStyle}>Product Video (optional)</label>
 

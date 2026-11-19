@@ -57,6 +57,15 @@ type CustomerOrder = {
   }[];
 };
 
+// Pakistani phone number helpers
+const normalizePakistaniPhone = (value: string) =>
+  value.replace(/[\s-]/g, "");
+
+const isValidPakistaniPhone = (value: string) => {
+  const phone = normalizePakistaniPhone(value);
+  return /^(03\d{9}|\+923\d{9})$/.test(phone);
+};
+
 export default function CartPage() {
   const router = useRouter();
   const orderRequestRef = useRef(false);
@@ -73,8 +82,12 @@ export default function CartPage() {
   const [form, setForm] = useState({
     name: "",
     phone: "",
+    alternativePhone: "",
     email: "",
     address: "",
+    city: "",
+    province: "",
+    postalCode: "",
     notes: "",
   });
 
@@ -83,6 +96,22 @@ export default function CartPage() {
   const [orderSnapshot, setOrderSnapshot] = useState<any>(null);
   const [placing, setPlacing] = useState(false);
   const [error, setError] = useState("");
+
+  // Phone validation
+  const primaryPhoneEntered = form.phone.trim() !== "";
+  const primaryPhoneValid = isValidPakistaniPhone(form.phone);
+
+  const alternativePhoneEntered = form.alternativePhone.trim() !== "";
+  const alternativePhoneValid =
+    !alternativePhoneEntered ||
+    isValidPakistaniPhone(form.alternativePhone);
+
+  const samePhoneNumber =
+    primaryPhoneValid &&
+    alternativePhoneEntered &&
+    alternativePhoneValid &&
+    normalizePakistaniPhone(form.phone) ===
+      normalizePakistaniPhone(form.alternativePhone);
 
   // FREE SHIPPING SETTINGS
   const [settings, setSettings] = useState<{
@@ -147,7 +176,12 @@ export default function CartPage() {
           ...prev,
           name: customer.name || "",
           phone: customer.phone || "",
+          alternativePhone: customer.alternativePhone || "",
           email: customer.email || "",
+          address: customer.address || "",
+          city: customer.city || "",
+          province: customer.province || "",
+          postalCode: customer.postalCode || "",
         }));
       }
     } catch (err) {
@@ -284,6 +318,52 @@ export default function CartPage() {
 
     if (items.length === 0 || orderRequestRef.current) return;
 
+    if (!form.phone.trim()) {
+      setError("Please enter your primary phone number.");
+      return;
+    }
+
+    if (!primaryPhoneValid) {
+      setError(
+        "Please enter a valid Pakistani phone number. Use 03XXXXXXXXX or +923XXXXXXXXX."
+      );
+      return;
+    }
+
+    if (alternativePhoneEntered && !alternativePhoneValid) {
+      setError(
+        "Please enter a valid alternative phone number. Use 03XXXXXXXXX or +923XXXXXXXXX."
+      );
+      return;
+    }
+
+    if (samePhoneNumber) {
+      setError(
+        "Primary and alternative phone numbers cannot be the same."
+      );
+      return;
+    }
+
+    if (!form.address.trim()) {
+      setError("Please enter your street address.");
+      return;
+    }
+
+    if (!form.city.trim()) {
+      setError("Please enter your city.");
+      return;
+    }
+
+    if (!form.province.trim()) {
+      setError("Please select your province.");
+      return;
+    }
+
+    if (!form.postalCode.trim()) {
+      setError("Please enter your ZIP / Postal Code.");
+      return;
+    }
+
     orderRequestRef.current = true;
     setPlacing(true);
     setError("");
@@ -297,6 +377,13 @@ export default function CartPage() {
         image: item.image,
       }));
 
+      const completeAddress = [
+        form.address.trim(),
+        form.city.trim(),
+        form.province.trim(),
+        form.postalCode.trim(),
+      ].join(", ");
+
       const res = await fetch("/api/orders", {
         method: "POST",
         credentials: "same-origin",
@@ -305,9 +392,12 @@ export default function CartPage() {
         },
         body: JSON.stringify({
           customerName: form.name.trim(),
-          customerPhone: form.phone.trim(),
+          customerPhone: normalizePakistaniPhone(form.phone),
+          customerAlternativePhone: alternativePhoneEntered
+            ? normalizePakistaniPhone(form.alternativePhone)
+            : "",
           customerEmail: form.email.trim(),
-          customerAddress: form.address.trim(),
+          customerAddress: completeAddress,
           notes: form.notes.trim(),
           items: orderItems,
           coinsUsed: coinsToUse,
@@ -330,8 +420,15 @@ export default function CartPage() {
         "ss-customer",
         JSON.stringify({
           name: form.name.trim(),
-          phone: form.phone.trim(),
+          phone: normalizePakistaniPhone(form.phone),
+          alternativePhone: alternativePhoneEntered
+            ? normalizePakistaniPhone(form.alternativePhone)
+            : "",
           email: form.email.trim(),
+          address: form.address.trim(),
+          city: form.city.trim(),
+          province: form.province.trim(),
+          postalCode: form.postalCode.trim(),
         })
       );
 
@@ -620,8 +717,12 @@ export default function CartPage() {
     setForm({
       name: "",
       phone: "",
+      alternativePhone: "",
       email: "",
       address: "",
+      city: "",
+      province: "",
+      postalCode: "",
       notes: "",
     });
 
@@ -984,25 +1085,124 @@ export default function CartPage() {
                   required
                   value={form.name}
                   onChange={(e) =>
-                    setForm({ ...form, name: e.target.value })
+                    setForm((prev) => ({ ...prev, name: e.target.value }))
                   }
                   placeholder="Ali Khan"
                   className="checkout-input"
                   style={inputStyle}
                 />
 
-                <label style={labelStyle}>Phone Number</label>
-                <input
-                  type="tel"
-                  required
-                  value={form.phone}
-                  onChange={(e) =>
-                    setForm({ ...form, phone: e.target.value })
-                  }
-                  placeholder="+92 300 1234567"
-                  className="checkout-input"
-                  style={inputStyle}
-                />
+                <label style={labelStyle}>Primary Phone Number *</label>
+
+                <div className="phone-input-wrapper">
+                  <input
+                    type="tel"
+                    required
+                    value={form.phone}
+                    onChange={(e) => {
+                      setForm((prev) => ({
+                        ...prev,
+                        phone: e.target.value,
+                      }));
+                      setError("");
+                    }}
+                    placeholder="03XXXXXXXXX or +923XXXXXXXXX"
+                    className={`checkout-input phone-input ${
+                      primaryPhoneEntered
+                        ? primaryPhoneValid
+                          ? "phone-valid"
+                          : "phone-invalid"
+                        : ""
+                    }`}
+                    style={{ ...inputStyle, marginBottom: 0 }}
+                    aria-invalid={
+                      primaryPhoneEntered && !primaryPhoneValid
+                    }
+                  />
+
+                  {primaryPhoneEntered && (
+                    <span
+                      className={`phone-validation-icon ${
+                        primaryPhoneValid ? "valid-icon" : "invalid-icon"
+                      }`}
+                    >
+                      {primaryPhoneValid ? (
+                        <CheckCircle2 size={19} />
+                      ) : (
+                        <X size={19} />
+                      )}
+                    </span>
+                  )}
+                </div>
+
+                {primaryPhoneEntered && !primaryPhoneValid && (
+                  <p className="phone-error">
+                    Enter a valid Pakistani mobile number. Example:
+                    03001234567
+                  </p>
+                )}
+
+                <label style={labelStyle}>
+                  Alternative Phone Number{" "}
+                  <span className="optional-label">(Optional)</span>
+                </label>
+
+                <div className="phone-input-wrapper">
+                  <input
+                    type="tel"
+                    value={form.alternativePhone}
+                    onChange={(e) => {
+                      setForm((prev) => ({
+                        ...prev,
+                        alternativePhone: e.target.value,
+                      }));
+                      setError("");
+                    }}
+                    placeholder="03XXXXXXXXX or +923XXXXXXXXX"
+                    className={`checkout-input phone-input ${
+                      alternativePhoneEntered
+                        ? alternativePhoneValid
+                          ? "phone-valid"
+                          : "phone-invalid"
+                        : ""
+                    }`}
+                    style={{ ...inputStyle, marginBottom: 0 }}
+                    aria-invalid={
+                      alternativePhoneEntered && !alternativePhoneValid
+                    }
+                  />
+
+                  {alternativePhoneEntered && (
+                    <span
+                      className={`phone-validation-icon ${
+                        alternativePhoneValid ? "valid-icon" : "invalid-icon"
+                      }`}
+                    >
+                      {alternativePhoneValid ? (
+                        <CheckCircle2 size={19} />
+                      ) : (
+                        <X size={19} />
+                      )}
+                    </span>
+                  )}
+                </div>
+
+                {alternativePhoneEntered && !alternativePhoneValid && (
+                  <p className="phone-error">
+                    Enter a valid Pakistani mobile number. Example:
+                    +923001234567
+                  </p>
+                )}
+
+                {samePhoneNumber && (
+                  <p className="phone-warning">
+                    Primary and alternative phone numbers cannot be the same.
+                  </p>
+                )}
+
+                <p className="phone-format-note">
+                  Accepted formats: 03XXXXXXXXX or +923XXXXXXXXX
+                </p>
 
                 <label style={labelStyle}>Email Address</label>
                 <input
@@ -1010,7 +1210,7 @@ export default function CartPage() {
                   required
                   value={form.email}
                   onChange={(e) =>
-                    setForm({ ...form, email: e.target.value })
+                    setForm((prev) => ({ ...prev, email: e.target.value }))
                   }
                   placeholder="you@example.com"
                   className="checkout-input"
@@ -1023,22 +1223,100 @@ export default function CartPage() {
                   </p>
                 )}
 
-                <label style={labelStyle}>Delivery Address</label>
-                <textarea
-                  required
-                  rows={3}
-                  value={form.address}
-                  onChange={(e) =>
-                    setForm({ ...form, address: e.target.value })
-                  }
-                  placeholder="House number, street, area, city"
-                  className="checkout-input"
-                  style={{
-                    ...inputStyle,
-                    resize: "vertical",
-                    minHeight: "90px",
-                  }}
-                />
+                {/* ADDRESS DETAILS */}
+                <div className="address-section">
+                  <div className="address-section-heading">
+                    <h3>Delivery Address</h3>
+                    <p>Enter your complete delivery location.</p>
+                  </div>
+
+                  <label style={labelStyle}>Street Address *</label>
+                  <textarea
+                    required
+                    rows={3}
+                    maxLength={1000}
+                    value={form.address}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        address: e.target.value,
+                      }))
+                    }
+                    placeholder="House number, street, area, sector"
+                    className="checkout-input"
+                    style={{
+                      ...inputStyle,
+                      resize: "vertical",
+                      minHeight: "90px",
+                    }}
+                  />
+
+                  <label style={labelStyle}>City *</label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={100}
+                    value={form.city}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        city: e.target.value,
+                      }))
+                    }
+                    placeholder="e.g. Islamabad"
+                    className="checkout-input"
+                    style={inputStyle}
+                  />
+
+                  <label style={labelStyle}>Province / Region *</label>
+                  <select
+                    required
+                    value={form.province}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        province: e.target.value,
+                      }))
+                    }
+                    className="checkout-input"
+                    style={inputStyle}
+                  >
+                    <option value="">Select Province / Region</option>
+                    <option value="Punjab">Punjab</option>
+                    <option value="Sindh">Sindh</option>
+                    <option value="Khyber Pakhtunkhwa">
+                      Khyber Pakhtunkhwa
+                    </option>
+                    <option value="Balochistan">Balochistan</option>
+                    <option value="Islamabad Capital Territory">
+                      Islamabad Capital Territory
+                    </option>
+                    <option value="Gilgit-Baltistan">
+                      Gilgit-Baltistan
+                    </option>
+                    <option value="Azad Jammu and Kashmir">
+                      Azad Jammu and Kashmir
+                    </option>
+                  </select>
+
+                  <label style={labelStyle}>ZIP / Postal Code *</label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={10}
+                    inputMode="numeric"
+                    value={form.postalCode}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        postalCode: e.target.value.replace(/[^0-9]/g, ""),
+                      }))
+                    }
+                    placeholder="e.g. 44000"
+                    className="checkout-input"
+                    style={inputStyle}
+                  />
+                </div>
 
                 <div className="payment-method">
                   <div className="payment-icon">
@@ -1054,7 +1332,13 @@ export default function CartPage() {
 
                 <button
                   type="submit"
-                  disabled={placing || items.length === 0}
+                  disabled={
+                    placing ||
+                    items.length === 0 ||
+                    !primaryPhoneValid ||
+                    !alternativePhoneValid ||
+                    samePhoneNumber
+                  }
                   className="place-order-button"
                 >
                   {placing
@@ -1147,9 +1431,7 @@ export default function CartPage() {
                 {useCoins && (
                   <div className="summary-row discount-row">
                     <span>Coins Discount</span>
-                    <strong>
-                      - Rs. {coinsToUse.toLocaleString()}
-                    </strong>
+                    <strong>- Rs. {coinsToUse.toLocaleString()}</strong>
                   </div>
                 )}
 
@@ -1298,14 +1580,20 @@ export default function CartPage() {
                 >
                   <option value="">Select return reason</option>
                   <option value="Damaged Product">Damaged Product</option>
-                  <option value="Wrong Product Received">Wrong Product Received</option>
+                  <option value="Wrong Product Received">
+                    Wrong Product Received
+                  </option>
                   <option value="Defective Product">Defective Product</option>
                   <option value="Missing Items">Missing Items</option>
-                  <option value="Product Not as Described">Product Not as Described</option>
+                  <option value="Product Not as Described">
+                    Product Not as Described
+                  </option>
                   <option value="Other">Other</option>
                 </select>
 
-                <label style={labelStyle}>Additional Details (Optional)</label>
+                <label style={labelStyle}>
+                  Additional Details (Optional)
+                </label>
 
                 <textarea
                   rows={4}
@@ -2065,6 +2353,92 @@ export default function CartPage() {
         .checkout-input:focus {
           border-color: var(--accent) !important;
           box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.08);
+        }
+
+        /* Phone validation */
+        .phone-input-wrapper {
+          position: relative;
+          width: 100%;
+          margin-bottom: 8px;
+        }
+
+        .phone-input {
+          padding-right: 42px !important;
+        }
+
+        .phone-input.phone-valid {
+          border-color: #16a34a !important;
+        }
+
+        .phone-input.phone-invalid {
+          border-color: #dc2626 !important;
+        }
+
+        .phone-validation-icon {
+          position: absolute;
+          right: 13px;
+          top: 50%;
+          transform: translateY(-50%);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          pointer-events: none;
+        }
+
+        .valid-icon { color: #16a34a; }
+        .invalid-icon { color: #dc2626; }
+
+        .phone-error {
+          color: #dc2626;
+          font-size: 11px;
+          margin: 0 0 13px;
+          line-height: 1.5;
+        }
+
+        .phone-warning {
+          color: #b45309;
+          background: #fffbeb;
+          border: 1px solid #fde68a;
+          border-radius: 7px;
+          padding: 9px 11px;
+          font-size: 11px;
+          margin: 0 0 13px;
+        }
+
+        .phone-format-note {
+          color: var(--text-muted);
+          font-size: 10px;
+          margin: -1px 0 17px;
+        }
+
+        .optional-label {
+          color: var(--text-muted);
+          font-size: 11px;
+          font-weight: 400;
+        }
+
+        /* Address section */
+        .address-section {
+          margin-top: 5px;
+        }
+
+        .address-section-heading {
+          border-top: 1px solid var(--border);
+          padding-top: 17px;
+          margin-bottom: 17px;
+        }
+
+        .address-section-heading h3 {
+          font-size: 15px;
+          font-weight: 700;
+          color: var(--text-primary);
+          margin: 0;
+        }
+
+        .address-section-heading p {
+          color: var(--text-muted);
+          font-size: 11px;
+          margin: 5px 0 0;
         }
 
         .checking-coins {

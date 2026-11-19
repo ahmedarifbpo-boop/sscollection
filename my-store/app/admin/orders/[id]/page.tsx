@@ -18,6 +18,8 @@ import {
   StickyNote,
   Save,
   AlertTriangle,
+  Pencil,
+  ShieldCheck,
 } from "lucide-react";
 
 interface OrderItem {
@@ -33,9 +35,11 @@ interface Order {
   orderNumber: string;
   customerName: string;
   customerPhone: string;
+  customerAlternativePhone: string | null;
   customerAddress: string;
   customerEmail: string | null;
   notes: string | null;
+  allowOpenParcel: boolean;
   subtotal: number;
   shipping: number;
   total: number;
@@ -53,6 +57,25 @@ const statuses = [
   { key: "CANCELLED", label: "Cancelled", color: "#EF4444", icon: XCircle },
 ];
 
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "11px 12px",
+  border: "1px solid var(--border)",
+  borderRadius: "4px",
+  background: "var(--surface)",
+  color: "var(--text-primary)",
+  fontSize: "13px",
+  outline: "none",
+};
+
+const fieldLabelStyle: React.CSSProperties = {
+  display: "block",
+  fontSize: "12px",
+  fontWeight: 600,
+  color: "var(--text-secondary)",
+  marginBottom: "6px",
+};
+
 export default function OrderDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -66,14 +89,34 @@ export default function OrderDetailPage() {
   const [savedMsg, setSavedMsg] = useState("");
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [error, setError] = useState("");
+  const [editingCustomer, setEditingCustomer] = useState(false);
 
-  // Admin session check + order fetch
+  const [customerForm, setCustomerForm] = useState({
+    customerName: "",
+    customerPhone: "",
+    customerAlternativePhone: "",
+    customerEmail: "",
+    customerAddress: "",
+  });
+
+  const [allowOpenParcel, setAllowOpenParcel] = useState(false);
+
+  const fillCustomerForm = (data: Order) => {
+    setCustomerForm({
+      customerName: data.customerName || "",
+      customerPhone: data.customerPhone || "",
+      customerAlternativePhone: data.customerAlternativePhone || "",
+      customerEmail: data.customerEmail || "",
+      customerAddress: data.customerAddress || "",
+    });
+    setAllowOpenParcel(Boolean(data.allowOpenParcel));
+  };
+
   useEffect(() => {
     let cancelled = false;
 
     async function loadOrder() {
       try {
-        // Verify admin session
         const sessionRes = await fetch("/api/admin/session", {
           method: "GET",
           credentials: "include",
@@ -102,7 +145,6 @@ export default function OrderDetailPage() {
 
         if (!id) return;
 
-        // Fetch order
         const res = await fetch(`/api/orders/${id}`, {
           method: "GET",
           credentials: "include",
@@ -128,6 +170,7 @@ export default function OrderDetailPage() {
         if (!cancelled) {
           setOrder(data.order);
           setNotes(data.order.notes || "");
+          fillCustomerForm(data.order);
           setError("");
         }
       } catch (err) {
@@ -153,7 +196,6 @@ export default function OrderDetailPage() {
     };
   }, [router, id]);
 
-  // Update order status
   const updateStatus = async (newStatus: string) => {
     if (!order || saving) return;
 
@@ -162,9 +204,7 @@ export default function OrderDetailPage() {
     try {
       const res = await fetch(`/api/orders/${id}`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ status: newStatus }),
       });
@@ -183,7 +223,7 @@ export default function OrderDetailPage() {
       setOrder(data.order);
       setSavedMsg(`Status updated to ${newStatus}`);
 
-      setTimeout(() => setSavedMsg(""), 2500);
+      window.setTimeout(() => setSavedMsg(""), 2500);
     } catch (err) {
       alert(
         "Failed to update: " +
@@ -194,7 +234,6 @@ export default function OrderDetailPage() {
     }
   };
 
-  // Save internal notes
   const saveNotes = async () => {
     if (!order || saving) return;
 
@@ -203,9 +242,7 @@ export default function OrderDetailPage() {
     try {
       const res = await fetch(`/api/orders/${id}`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ notes }),
       });
@@ -218,13 +255,12 @@ export default function OrderDetailPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || "Failed to save notes.");
+        throw new Error(data.error || "Failed to save remarks.");
       }
 
       setOrder(data.order);
-      setSavedMsg("Notes saved");
-
-      setTimeout(() => setSavedMsg(""), 2500);
+      setSavedMsg("Remarks saved successfully");
+      window.setTimeout(() => setSavedMsg(""), 2500);
     } catch (err) {
       alert(
         "Failed to save: " +
@@ -235,13 +271,68 @@ export default function OrderDetailPage() {
     }
   };
 
-  // Cancel order
+  const saveCustomerDetails = async () => {
+    if (!order || saving || order.status !== "PENDING") return;
+
+    if (
+      !customerForm.customerName.trim() ||
+      !customerForm.customerPhone.trim() ||
+      !customerForm.customerAddress.trim()
+    ) {
+      alert("Customer name, phone and address are required.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+
+    try {
+      const res = await fetch(`/api/orders/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          ...customerForm,
+          customerAlternativePhone:
+            customerForm.customerAlternativePhone.trim() || null,
+          customerEmail: customerForm.customerEmail.trim() || null,
+          allowOpenParcel,
+        }),
+      });
+
+      if (res.status === 401) {
+        router.replace("/admin/login");
+        return;
+      }
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to save customer details.");
+      }
+
+      setOrder(data.order);
+      fillCustomerForm(data.order);
+      setEditingCustomer(false);
+      setSavedMsg("Customer details saved successfully");
+
+      window.setTimeout(() => setSavedMsg(""), 2500);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to save customer details."
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleCancel = async () => {
     await updateStatus("CANCELLED");
     setShowCancelConfirm(false);
   };
 
-  // Format date
   const formatDate = (iso: string) => {
     return new Date(iso).toLocaleString("en-PK", {
       day: "2-digit",
@@ -250,6 +341,13 @@ export default function OrderDetailPage() {
       hour: "2-digit",
       minute: "2-digit",
     });
+  };
+
+  const updateCustomerField = (
+    field: keyof typeof customerForm,
+    value: string
+  ) => {
+    setCustomerForm((prev) => ({ ...prev, [field]: value }));
   };
 
   if (!ready || loading) {
@@ -270,12 +368,7 @@ export default function OrderDetailPage() {
     return (
       <div style={{ padding: "60px 24px", textAlign: "center" }}>
         <p style={{ color: "#EF4444", marginBottom: "16px" }}>{error}</p>
-
-        <Link
-          href="/admin/orders"
-          className="dz-btn-primary"
-          style={{ display: "inline-block", textDecoration: "none" }}
-        >
+        <Link href="/admin/orders" className="dz-btn-primary">
           Back to Orders
         </Link>
       </div>
@@ -294,12 +387,7 @@ export default function OrderDetailPage() {
         >
           Order not found
         </h1>
-
-        <Link
-          href="/admin/orders"
-          className="dz-btn-primary"
-          style={{ display: "inline-block", textDecoration: "none" }}
-        >
+        <Link href="/admin/orders" className="dz-btn-primary">
           Back to Orders
         </Link>
       </div>
@@ -308,10 +396,10 @@ export default function OrderDetailPage() {
 
   const cfg = statuses.find((s) => s.key === order.status) || statuses[0];
   const StatusIcon = cfg.icon;
+  const canEditCustomer = order.status === "PENDING";
 
   return (
     <div>
-      {/* Back */}
       <Link
         href="/admin/orders"
         style={{
@@ -328,7 +416,6 @@ export default function OrderDetailPage() {
         Back to Orders
       </Link>
 
-      {/* Header */}
       <div
         style={{
           display: "flex",
@@ -346,6 +433,7 @@ export default function OrderDetailPage() {
               alignItems: "center",
               gap: "12px",
               marginBottom: "6px",
+              flexWrap: "wrap",
             }}
           >
             <h1
@@ -381,7 +469,6 @@ export default function OrderDetailPage() {
           </p>
         </div>
 
-        {/* Cancel Button */}
         {order.status !== "CANCELLED" &&
           order.status !== "DELIVERED" && (
             <button
@@ -407,7 +494,6 @@ export default function OrderDetailPage() {
           )}
       </div>
 
-      {/* Error Message */}
       {error && (
         <div
           style={{
@@ -423,11 +509,7 @@ export default function OrderDetailPage() {
         </div>
       )}
 
-      {/* Status Update */}
-      <div
-        className="dz-card"
-        style={{ padding: "20px", marginBottom: "20px" }}
-      >
+      <div className="dz-card" style={{ padding: "20px", marginBottom: "20px" }}>
         <h2
           style={{
             fontSize: "14px",
@@ -460,9 +542,7 @@ export default function OrderDetailPage() {
                   border: isActive
                     ? `1px solid ${s.color}`
                     : "1px solid var(--border)",
-                  background: isActive
-                    ? `${s.color}15`
-                    : "var(--surface)",
+                  background: isActive ? `${s.color}15` : "var(--surface)",
                   color: isActive ? s.color : "var(--text-secondary)",
                   cursor: isActive ? "default" : "pointer",
                   opacity: saving ? 0.5 : 1,
@@ -497,15 +577,7 @@ export default function OrderDetailPage() {
           gap: "20px",
         }}
       >
-        {/* LEFT — Items */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "20px",
-          }}
-        >
-          {/* Items */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
           <div className="dz-card" style={{ padding: "20px" }}>
             <h2
               style={{
@@ -518,13 +590,7 @@ export default function OrderDetailPage() {
               Order Items ({order.items.length})
             </h2>
 
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "10px",
-              }}
-            >
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
               {order.items.map((item) => (
                 <div
                   key={item.id}
@@ -557,14 +623,8 @@ export default function OrderDetailPage() {
                       {item.name}
                     </div>
 
-                    <div
-                      style={{
-                        fontSize: "11px",
-                        color: "var(--text-muted)",
-                      }}
-                    >
-                      Qty: {item.quantity} × Rs.{" "}
-                      {item.price.toLocaleString()}
+                    <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                      Qty: {item.quantity} × Rs. {item.price.toLocaleString()}
                     </div>
                   </div>
 
@@ -576,14 +636,12 @@ export default function OrderDetailPage() {
                       whiteSpace: "nowrap",
                     }}
                   >
-                    Rs.{" "}
-                    {(item.price * item.quantity).toLocaleString()}
+                    Rs. {(item.price * item.quantity).toLocaleString()}
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* Totals */}
             <div
               style={{
                 borderTop: "1px solid var(--border)",
@@ -617,7 +675,7 @@ export default function OrderDetailPage() {
                 <span>
                   {order.shipping === 0
                     ? "FREE"
-                    : `Rs. ${order.shipping}`}
+                    : `Rs. ${order.shipping.toLocaleString()}`}
                 </span>
               </div>
 
@@ -632,13 +690,12 @@ export default function OrderDetailPage() {
                   borderTop: "1px solid var(--border)",
                 }}
               >
-                <span>Total (COD)</span>
+                <span>Total ({order.paymentMethod})</span>
                 <span>Rs. {order.total.toLocaleString()}</span>
               </div>
             </div>
           </div>
 
-          {/* Notes */}
           <div className="dz-card" style={{ padding: "20px" }}>
             <h2
               style={{
@@ -652,18 +709,29 @@ export default function OrderDetailPage() {
               }}
             >
               <StickyNote size={16} />
-              Internal Notes
+              Order Remarks
             </h2>
+
+            <p
+              style={{
+                fontSize: "12px",
+                color: "var(--text-muted)",
+                marginBottom: "10px",
+              }}
+            >
+              Customer confirmation call aur delivery instructions ke remarks.
+            </p>
 
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              rows={3}
-              placeholder="Add notes about this order (dispute reason, customer feedback, etc.)"
+              rows={4}
+              placeholder="Enter order remarks..."
               className="dz-input"
               style={{
-                resize: "none",
+                resize: "vertical",
                 marginBottom: "10px",
+                width: "100%",
               }}
             />
 
@@ -680,202 +748,377 @@ export default function OrderDetailPage() {
               }}
             >
               <Save size={14} />
-              {saving ? "Saving..." : "Save Notes"}
+              {saving ? "Saving..." : "Save Remarks"}
             </button>
           </div>
         </div>
 
-        {/* RIGHT — Customer */}
         <div>
           <div className="dz-card" style={{ padding: "20px" }}>
-            <h2
-              style={{
-                fontSize: "14px",
-                fontWeight: "500",
-                color: "var(--text-primary)",
-                marginBottom: "14px",
-              }}
-            >
-              Customer Details
-            </h2>
-
             <div
               style={{
                 display: "flex",
-                flexDirection: "column",
-                gap: "14px",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "10px",
+                marginBottom: "14px",
+                flexWrap: "wrap",
               }}
             >
-              <div style={{ display: "flex", gap: "10px" }}>
-                <User
-                  size={16}
-                  style={{
-                    color: "var(--accent)",
-                    flexShrink: 0,
-                    marginTop: "2px",
+              <h2
+                style={{
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  color: "var(--text-primary)",
+                }}
+              >
+                Customer Details
+              </h2>
+
+              {canEditCustomer && !editingCustomer && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    fillCustomerForm(order);
+                    setEditingCustomer(true);
                   }}
-                />
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "8px 12px",
+                    border: "1px solid var(--border)",
+                    borderRadius: "4px",
+                    background: "var(--surface)",
+                    color: "var(--accent)",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  <Pencil size={14} />
+                  Edit Details
+                </button>
+              )}
+            </div>
+
+            {editingCustomer && canEditCustomer ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "13px" }}>
+                <div>
+                  <label style={fieldLabelStyle}>Customer Name *</label>
+                  <input
+                    style={inputStyle}
+                    value={customerForm.customerName}
+                    onChange={(e) =>
+                      updateCustomerField("customerName", e.target.value)
+                    }
+                    placeholder="Customer name"
+                  />
+                </div>
 
                 <div>
-                  <div
-                    style={{
-                      fontSize: "11px",
-                      color: "var(--text-muted)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
-                      marginBottom: "2px",
-                    }}
-                  >
-                    Name
-                  </div>
+                  <label style={fieldLabelStyle}>Phone Number *</label>
+                  <input
+                    style={inputStyle}
+                    type="tel"
+                    value={customerForm.customerPhone}
+                    onChange={(e) =>
+                      updateCustomerField("customerPhone", e.target.value)
+                    }
+                    placeholder="Phone number"
+                  />
+                </div>
 
+                <div>
+                  <label style={fieldLabelStyle}>Alternative Phone</label>
+                  <input
+                    style={inputStyle}
+                    type="tel"
+                    value={customerForm.customerAlternativePhone}
+                    onChange={(e) =>
+                      updateCustomerField(
+                        "customerAlternativePhone",
+                        e.target.value
+                      )
+                    }
+                    placeholder="Alternative phone (optional)"
+                  />
+                </div>
+
+                <div>
+                  <label style={fieldLabelStyle}>Email</label>
+                  <input
+                    style={inputStyle}
+                    type="email"
+                    value={customerForm.customerEmail}
+                    onChange={(e) =>
+                      updateCustomerField("customerEmail", e.target.value)
+                    }
+                    placeholder="Email address (optional)"
+                  />
+                </div>
+
+                <div>
+                  <label style={fieldLabelStyle}>Delivery Address *</label>
+                  <textarea
+                    style={{
+                      ...inputStyle,
+                      resize: "vertical",
+                      minHeight: "85px",
+                    }}
+                    value={customerForm.customerAddress}
+                    onChange={(e) =>
+                      updateCustomerField("customerAddress", e.target.value)
+                    }
+                    placeholder="Complete delivery address"
+                  />
+                </div>
+
+                <div
+                  style={{
+                    border: "1px solid var(--border)",
+                    borderRadius: "5px",
+                    padding: "14px",
+                  }}
+                >
                   <div
                     style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "7px",
+                      marginBottom: "10px",
                       fontSize: "13px",
-                      fontWeight: "500",
+                      fontWeight: 600,
                       color: "var(--text-primary)",
                     }}
                   >
-                    {order.customerName}
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ display: "flex", gap: "10px" }}>
-                <Phone
-                  size={16}
-                  style={{
-                    color: "var(--accent)",
-                    flexShrink: 0,
-                    marginTop: "2px",
-                  }}
-                />
-
-                <div>
-                  <div
-                    style={{
-                      fontSize: "11px",
-                      color: "var(--text-muted)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
-                      marginBottom: "2px",
-                    }}
-                  >
-                    Phone
+                    <ShieldCheck size={17} />
+                    Allow Customer to Open Parcel?
                   </div>
 
-                  <a
-                    href={`tel:${order.customerPhone}`}
-                    style={{
-                      fontSize: "13px",
-                      fontWeight: "500",
-                      color: "var(--accent)",
-                      textDecoration: "none",
-                    }}
-                  >
-                    {order.customerPhone}
-                  </a>
-                </div>
-              </div>
-
-              {order.customerEmail && (
-                <div style={{ display: "flex", gap: "10px" }}>
-                  <Mail
-                    size={16}
-                    style={{
-                      color: "var(--accent)",
-                      flexShrink: 0,
-                      marginTop: "2px",
-                    }}
-                  />
-
-                  <div>
-                    <div
+                  <div style={{ display: "flex", gap: "10px" }}>
+                    <button
+                      type="button"
+                      onClick={() => setAllowOpenParcel(true)}
                       style={{
-                        fontSize: "11px",
-                        color: "var(--text-muted)",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.05em",
-                        marginBottom: "2px",
+                        flex: 1,
+                        padding: "10px",
+                        borderRadius: "4px",
+                        border: allowOpenParcel
+                          ? "1px solid #10B981"
+                          : "1px solid var(--border)",
+                        background: allowOpenParcel ? "#10B98115" : "var(--surface)",
+                        color: allowOpenParcel ? "#10B981" : "var(--text-secondary)",
+                        fontSize: "13px",
+                        fontWeight: 600,
+                        cursor: "pointer",
                       }}
                     >
-                      Email
-                    </div>
+                      Yes
+                    </button>
 
+                    <button
+                      type="button"
+                      onClick={() => setAllowOpenParcel(false)}
+                      style={{
+                        flex: 1,
+                        padding: "10px",
+                        borderRadius: "4px",
+                        border: !allowOpenParcel
+                          ? "1px solid #EF4444"
+                          : "1px solid var(--border)",
+                        background: !allowOpenParcel ? "#EF444415" : "var(--surface)",
+                        color: !allowOpenParcel ? "#EF4444" : "var(--text-secondary)",
+                        fontSize: "13px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      No
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button
+                    type="button"
+                    onClick={saveCustomerDetails}
+                    disabled={saving}
+                    className="dz-btn-primary"
+                    style={{
+                      flex: 1,
+                      display: "inline-flex",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      gap: "7px",
+                      padding: "11px",
+                      fontSize: "12px",
+                    }}
+                  >
+                    <Save size={14} />
+                    {saving ? "Saving..." : "Save Details"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      fillCustomerForm(order);
+                      setEditingCustomer(false);
+                    }}
+                    disabled={saving}
+                    className="dz-btn-secondary"
+                    style={{
+                      padding: "11px 14px",
+                      fontSize: "12px",
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                <div style={{ display: "flex", gap: "10px" }}>
+                  <User size={16} style={{ color: "var(--accent)", flexShrink: 0 }} />
+                  <div>
+                    <div style={fieldLabelStyle}>Name</div>
+                    <div style={{ fontSize: "13px", color: "var(--text-primary)" }}>
+                      {order.customerName}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: "10px" }}>
+                  <Phone size={16} style={{ color: "var(--accent)", flexShrink: 0 }} />
+                  <div>
+                    <div style={fieldLabelStyle}>Phone</div>
+                    <a
+                      href={`tel:${order.customerPhone}`}
+                      style={{
+                        fontSize: "13px",
+                        color: "var(--accent)",
+                        textDecoration: "none",
+                      }}
+                    >
+                      {order.customerPhone}
+                    </a>
+                  </div>
+                </div>
+
+                {order.customerAlternativePhone && (
+                  <div style={{ display: "flex", gap: "10px" }}>
+                    <Phone size={16} style={{ color: "var(--accent)", flexShrink: 0 }} />
+                    <div>
+                      <div style={fieldLabelStyle}>Alternative Phone</div>
+                      <a
+                        href={`tel:${order.customerAlternativePhone}`}
+                        style={{
+                          fontSize: "13px",
+                          color: "var(--accent)",
+                          textDecoration: "none",
+                        }}
+                      >
+                        {order.customerAlternativePhone}
+                      </a>
+                    </div>
+                  </div>
+                )}
+
+                {order.customerEmail && (
+                  <div style={{ display: "flex", gap: "10px" }}>
+                    <Mail size={16} style={{ color: "var(--accent)", flexShrink: 0 }} />
+                    <div>
+                      <div style={fieldLabelStyle}>Email</div>
+                      <div style={{ fontSize: "13px", color: "var(--text-primary)" }}>
+                        {order.customerEmail}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: "flex", gap: "10px" }}>
+                  <MapPin size={16} style={{ color: "var(--accent)", flexShrink: 0 }} />
+                  <div>
+                    <div style={fieldLabelStyle}>Delivery Address</div>
                     <div
                       style={{
                         fontSize: "13px",
                         color: "var(--text-primary)",
+                        lineHeight: "20px",
                       }}
                     >
-                      {order.customerEmail}
+                      {order.customerAddress}
                     </div>
                   </div>
                 </div>
-              )}
 
-              <div style={{ display: "flex", gap: "10px" }}>
-                <MapPin
-                  size={16}
+                <div
                   style={{
-                    color: "var(--accent)",
-                    flexShrink: 0,
-                    marginTop: "2px",
+                    padding: "12px",
+                    background: order.allowOpenParcel ? "#10B98112" : "#EF444412",
+                    border: `1px solid ${order.allowOpenParcel ? "#10B98140" : "#EF444440"}`,
+                    borderRadius: "4px",
                   }}
-                />
-
-                <div>
+                >
                   <div
                     style={{
                       fontSize: "11px",
                       color: "var(--text-muted)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
-                      marginBottom: "2px",
+                      marginBottom: "4px",
+                      fontWeight: 600,
                     }}
                   >
-                    Delivery Address
+                    OPEN PARCEL PERMISSION
                   </div>
-
                   <div
                     style={{
                       fontSize: "13px",
-                      color: "var(--text-primary)",
-                      lineHeight: "20px",
+                      fontWeight: 700,
+                      color: order.allowOpenParcel ? "#10B981" : "#EF4444",
                     }}
                   >
-                    {order.customerAddress}
+                    {order.allowOpenParcel ? "YES — Allowed" : "NO — Not Allowed"}
                   </div>
                 </div>
-              </div>
-            </div>
 
-            {/* Call Button */}
-            <a
-              href={`tel:${order.customerPhone}`}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "8px",
-                marginTop: "16px",
-                padding: "12px",
-                background: "var(--accent)",
-                color: "#fff",
-                borderRadius: "3px",
-                fontSize: "13px",
-                fontWeight: "500",
-                textDecoration: "none",
-              }}
-            >
-              <Phone size={16} />
-              Call Customer
-            </a>
+                {!canEditCustomer && (
+                  <p
+                    style={{
+                      fontSize: "11px",
+                      color: "var(--text-muted)",
+                      lineHeight: "17px",
+                    }}
+                  >
+                    Customer details can only be edited while the order is Pending.
+                  </p>
+                )}
+
+                <a
+                  href={`tel:${order.customerPhone}`}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "8px",
+                    marginTop: "4px",
+                    padding: "12px",
+                    background: "var(--accent)",
+                    color: "#fff",
+                    borderRadius: "3px",
+                    fontSize: "13px",
+                    fontWeight: "500",
+                    textDecoration: "none",
+                  }}
+                >
+                  <Phone size={16} />
+                  Call Customer
+                </a>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Cancel Confirmation Popup */}
       {showCancelConfirm && (
         <div
           className="fade-in"
@@ -913,10 +1156,7 @@ export default function OrderDetailPage() {
                 marginBottom: "16px",
               }}
             >
-              <AlertTriangle
-                size={28}
-                style={{ color: "#EF4444" }}
-              />
+              <AlertTriangle size={28} style={{ color: "#EF4444" }} />
             </div>
 
             <h3

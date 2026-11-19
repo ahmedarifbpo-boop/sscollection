@@ -3,17 +3,49 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAdminRequest } from "@/lib/admin-auth";
 
-// GET /api/products/[id] — public product detail
+type RouteContext = {
+  params: Promise<{ id: string }>;
+};
+
+// GET /api/products/[id]
+// Public: private cost hidden
+// Admin: private cost included for editing
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: RouteContext
 ) {
   try {
     const { id } = await params;
 
-    const product = await prisma.product.findUnique({
-      where: { id },
-    });
+    const auth = await verifyAdminRequest(request);
+
+    const product = auth
+      ? await prisma.product.findUnique({
+          where: { id },
+        })
+      : await prisma.product.findUnique({
+          where: { id },
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            description: true,
+            category: true,
+            price: true,
+            salePrice: true,
+            stock: true,
+            isManuallyOutOfStock: true,
+            image: true,
+            images: true,
+            video: true,
+            rating: true,
+            reviews: true,
+            metaTitle: true,
+            metaDescription: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        });
 
     if (!product) {
       return NextResponse.json(
@@ -43,10 +75,12 @@ export async function GET(
 // PUT /api/products/[id] — admin only
 export async function PUT(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: RouteContext
 ) {
   try {
-    if (!verifyAdminRequest(request)) {
+    const auth = await verifyAdminRequest(request);
+
+    if (!auth) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
@@ -56,12 +90,20 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json();
 
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json(
+        { error: "Invalid request body" },
+        { status: 400 }
+      );
+    }
+
     const {
       name,
       description,
       category,
       price,
       salePrice,
+      costPrice,
       stock,
       image,
       images,
@@ -90,34 +132,151 @@ export async function PUT(
       );
     }
 
+    // Validate text fields
+    if (
+      name !== undefined &&
+      (typeof name !== "string" || !name.trim())
+    ) {
+      return NextResponse.json(
+        { error: "Invalid product name" },
+        { status: 400 }
+      );
+    }
+
+    if (
+      description !== undefined &&
+      (typeof description !== "string" || !description.trim())
+    ) {
+      return NextResponse.json(
+        { error: "Invalid description" },
+        { status: 400 }
+      );
+    }
+
+    if (
+      category !== undefined &&
+      (typeof category !== "string" || !category.trim())
+    ) {
+      return NextResponse.json(
+        { error: "Invalid category" },
+        { status: 400 }
+      );
+    }
+
+    // Validate regular price
+    const updatedPrice =
+      price !== undefined ? Number(price) : existing.price;
+
+    if (!Number.isFinite(updatedPrice) || updatedPrice <= 0) {
+      return NextResponse.json(
+        { error: "Price must be a positive number" },
+        { status: 400 }
+      );
+    }
+
+    // Validate sale price
+    const updatedSalePrice =
+      salePrice === undefined
+        ? existing.salePrice
+        : salePrice === null || salePrice === ""
+          ? null
+          : Number(salePrice);
+
+    if (
+      updatedSalePrice !== null &&
+      (!Number.isFinite(updatedSalePrice) ||
+        updatedSalePrice <= 0 ||
+        updatedSalePrice >= updatedPrice)
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Sale price must be positive and less than regular price",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Validate actual purchase cost
+    const updatedCostPrice =
+      costPrice === undefined
+        ? existing.costPrice
+        : Number(costPrice);
+
+    if (
+      !Number.isFinite(updatedCostPrice) ||
+      updatedCostPrice < 0
+    ) {
+      return NextResponse.json(
+        { error: "Cost price must be a valid non-negative number" },
+        { status: 400 }
+      );
+    }
+
+    // Validate stock
+    const updatedStock =
+      stock !== undefined ? Number(stock) : existing.stock;
+
+    if (
+      !Number.isSafeInteger(updatedStock) ||
+      updatedStock < 0
+    ) {
+      return NextResponse.json(
+        { error: "Stock must be a non-negative whole number" },
+        { status: 400 }
+      );
+    }
+
+    // Validate video
+    if (
+      video !== undefined &&
+      video !== null &&
+      typeof video !== "string"
+    ) {
+      return NextResponse.json(
+        { error: "Invalid video value" },
+        { status: 400 }
+      );
+    }
+
+    // Validate images
     let updatedImages: string[] | undefined;
     let updatedImage: string | undefined;
 
-    // Agar images array bheja gaya hai to usay complete gallery samjho
     if (images !== undefined) {
-      if (!Array.isArray(images)) {
+      if (
+        !Array.isArray(images) ||
+        !images.every((item) => typeof item === "string")
+      ) {
         return NextResponse.json(
-          { error: "Images must be an array" },
+          { error: "Images must be an array of strings" },
           { status: 400 }
         );
       }
 
       updatedImages = images
-        .filter((item): item is string => typeof item === "string")
-        .map((item) => item.trim())
+        .map((item: string) => item.trim())
         .filter(Boolean);
 
       updatedImage = updatedImages[0] || "";
     } else if (image !== undefined) {
-      updatedImage = String(image).trim();
+      if (typeof image !== "string") {
+        return NextResponse.json(
+          { error: "Invalid image value" },
+          { status: 400 }
+        );
+      }
 
-      updatedImages = existing.images.length > 0
-        ? updatedImage
-          ? [updatedImage, ...existing.images.slice(1)]
-          : existing.images.slice(1)
-        : updatedImage
-          ? [updatedImage]
-          : [];
+      updatedImage = image.trim();
+
+      updatedImages =
+        existing.images.length > 0
+          ? updatedImage
+            ? [updatedImage, ...existing.images.slice(1)]
+            : existing.images.slice(1)
+          : updatedImage
+            ? [updatedImage]
+            : [];
     }
 
     const product = await prisma.product.update({
@@ -125,57 +284,62 @@ export async function PUT(
       data: {
         name:
           name !== undefined
-            ? String(name).trim()
+            ? name.trim()
             : undefined,
 
         description:
           description !== undefined
-            ? String(description).trim()
+            ? description.trim()
             : undefined,
 
         category:
           category !== undefined
-            ? String(category).trim()
+            ? category.trim()
             : undefined,
 
         price:
           price !== undefined
-            ? Number(price)
+            ? updatedPrice
             : undefined,
 
         salePrice:
-          salePrice === null || salePrice === ""
-            ? null
-            : salePrice !== undefined
-              ? Number(salePrice)
-              : undefined,
+          salePrice !== undefined
+            ? updatedSalePrice
+            : undefined,
+
+        costPrice:
+          costPrice !== undefined
+            ? updatedCostPrice
+            : undefined,
 
         stock:
           stock !== undefined
-            ? Number(stock)
+            ? updatedStock
             : undefined,
 
-        // Manual Out of Stock toggle
         isManuallyOutOfStock:
-          typeof isManuallyOutOfStock === "boolean"
+          isManuallyOutOfStock !== undefined
             ? isManuallyOutOfStock
             : undefined,
 
-        // Main image aur gallery synchronize rahengi
         image: updatedImage,
         images: updatedImages,
 
-        // null ya empty string video remove karega
         video:
           video === null || video === ""
-            ? null
+            ? video !== undefined
+              ? null
+              : undefined
             : video !== undefined
-              ? String(video).trim()
+              ? video.trim()
               : undefined,
       },
     });
 
-    return NextResponse.json({ product });
+    // Private cost must not be returned in PUT response.
+    const { costPrice: _privateCostPrice, ...publicProduct } = product;
+
+    return NextResponse.json({ product: publicProduct });
   } catch (error) {
     console.error("PUT /api/products/[id] error:", error);
 
@@ -189,10 +353,12 @@ export async function PUT(
 // DELETE /api/products/[id] — admin only
 export async function DELETE(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: RouteContext
 ) {
   try {
-    if (!verifyAdminRequest(request)) {
+    const auth = await verifyAdminRequest(request);
+
+    if (!auth) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
