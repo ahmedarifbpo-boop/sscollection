@@ -44,7 +44,6 @@ interface Review {
   createdAt: string;
 }
 
-// Reusable half-star rating display
 function RatingStars({
   rating,
   size = 14,
@@ -121,7 +120,6 @@ function ProductContent() {
   const [freeThreshold, setFreeThreshold] = useState(5000);
   const [enableFreeShipping, setEnableFreeShipping] = useState(true);
 
-  // Approved Reviews
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(true);
 
@@ -249,7 +247,6 @@ function ProductContent() {
 
   const finalPrice = product.salePrice || product.price;
 
-  // Automatic + Manual Out of Stock
   const isOutOfStock =
     product.stock <= 0 || product.isManuallyOutOfStock;
 
@@ -276,7 +273,9 @@ function ProductContent() {
       style={{
         background: "var(--bg)",
         minHeight: "100vh",
-        padding: "24px",
+        padding: "clamp(12px, 3vw, 24px)",
+        boxSizing: "border-box",
+        overflowX: "hidden",
       }}
     >
       <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
@@ -475,6 +474,7 @@ function ProductContent() {
                 color: "var(--text-primary)",
                 lineHeight: "30px",
                 marginBottom: "12px",
+                overflowWrap: "anywhere",
               }}
             >
               {product.name}
@@ -518,6 +518,7 @@ function ProductContent() {
                 marginBottom: "16px",
                 paddingBottom: "16px",
                 borderBottom: "1px solid var(--border)",
+                flexWrap: "wrap",
               }}
             >
               <RatingStars rating={product.rating} size={16} />
@@ -559,6 +560,7 @@ function ProductContent() {
                       alignItems: "baseline",
                       gap: "10px",
                       marginBottom: "4px",
+                      flexWrap: "wrap",
                     }}
                   >
                     <span
@@ -625,6 +627,7 @@ function ProductContent() {
                   fontSize: "14px",
                   color: "var(--text-secondary)",
                   lineHeight: "22px",
+                  overflowWrap: "anywhere",
                 }}
               >
                 {product.description}
@@ -757,13 +760,13 @@ function ProductContent() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(3, 1fr)",
+                gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
                 gap: "12px",
                 paddingTop: "16px",
                 borderTop: "1px solid var(--border)",
               }}
             >
-              <div style={{ textAlign: "center" }}>
+              <div style={{ textAlign: "center", minWidth: 0 }}>
                 <Truck
                   size={20}
                   style={{
@@ -782,7 +785,7 @@ function ProductContent() {
                 </div>
               </div>
 
-              <div style={{ textAlign: "center" }}>
+              <div style={{ textAlign: "center", minWidth: 0 }}>
                 <ShieldCheck
                   size={20}
                   style={{
@@ -801,7 +804,7 @@ function ProductContent() {
                 </div>
               </div>
 
-              <div style={{ textAlign: "center" }}>
+              <div style={{ textAlign: "center", minWidth: 0 }}>
                 <RotateCcw
                   size={20}
                   style={{
@@ -813,7 +816,6 @@ function ProductContent() {
                   style={{
                     fontSize: "11px",
                     color: "var(--text-secondary)",
-                    marginBottom: "6px",
                     lineHeight: "15px",
                   }}
                 >
@@ -833,6 +835,7 @@ function ProductContent() {
                 background: "var(--bg-alt)",
                 padding: "10px",
                 borderRadius: "3px",
+                overflowWrap: "anywhere",
               }}
             >
               🚚 Shipping:{" "}
@@ -853,10 +856,12 @@ function ProductContent() {
           id="reviews"
           style={{
             marginTop: "36px",
-            padding: "24px",
+            padding: "clamp(14px, 3vw, 24px)",
             background: "var(--surface)",
             border: "1px solid var(--border)",
             borderRadius: "4px",
+            minWidth: 0,
+            boxSizing: "border-box",
           }}
         >
           <div
@@ -865,6 +870,7 @@ function ProductContent() {
               alignItems: "center",
               gap: "10px",
               marginBottom: "8px",
+              flexWrap: "wrap",
             }}
           >
             <MessageSquare size={21} color="var(--accent)" />
@@ -899,6 +905,7 @@ function ProductContent() {
               borderRadius: "4px",
               marginBottom: "28px",
               border: "1px solid var(--border)",
+              boxSizing: "border-box",
             }}
           >
             <h3
@@ -1001,6 +1008,8 @@ function ProductContent() {
                       border: "1px solid var(--border)",
                       borderRadius: "4px",
                       background: "var(--surface)",
+                      minWidth: 0,
+                      boxSizing: "border-box",
                     }}
                   >
                     <div
@@ -1101,106 +1110,44 @@ function ProductContent() {
         {/* RELATED PRODUCTS */}
 
         {related.length > 0 && (
-          <section style={{ marginTop: "32px" }}>
+          <section className="related-products-section">
             <h2 className="dz-section-title">You may also like</h2>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns:
-                  "repeat(auto-fill, minmax(180px, 1fr))",
-                gap: "12px",
-              }}
-            >
+            <div className="related-products-grid">
               {related.map((p) => (
                 <Link
                   key={p.id}
                   href={`/product/${p.id}`}
-                  className="dz-card dz-card-hover"
-                  style={{
-                    overflow: "hidden",
-                    display: "block",
-                    textDecoration: "none",
-                  }}
+                  className="dz-card dz-card-hover related-product-card"
                 >
-                  <div
-                    style={{
-                      aspectRatio: "1 / 1",
-                      overflow: "hidden",
-                      background: "var(--bg-alt)",
-                      position: "relative",
-                    }}
-                  >
+                  <div className="related-product-image">
                     <img
                       src={p.images?.[0] || p.image}
                       alt={p.name}
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover",
-                      }}
                     />
 
                     {(p.stock <= 0 || p.isManuallyOutOfStock) && (
-                      <span
-                        style={{
-                          position: "absolute",
-                          bottom: "8px",
-                          left: "8px",
-                          background: "#DC2626",
-                          color: "#fff",
-                          fontSize: "10px",
-                          fontWeight: "600",
-                          padding: "5px 8px",
-                          borderRadius: "3px",
-                        }}
-                      >
+                      <span className="related-stock-badge">
                         Out of Stock
                       </span>
                     )}
                   </div>
 
-                  <div style={{ padding: "10px" }}>
-                    <h3
-                      className="line-clamp-2"
-                      style={{
-                        fontSize: "12px",
-                        marginBottom: "6px",
-                        minHeight: "32px",
-                      }}
-                    >
+                  <div className="related-product-info">
+                    <h3 className="related-product-name line-clamp-2">
                       {p.name}
                     </h3>
 
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "5px",
-                        marginBottom: "7px",
-                      }}
-                    >
+                    <div className="related-product-rating">
                       <RatingStars rating={p.rating} size={12} />
 
-                      <span
-                        style={{
-                          fontSize: "11px",
-                          color: "var(--text-muted)",
-                        }}
-                      >
+                      <span>
                         {Number(p.rating || 0).toFixed(1)}
                       </span>
                     </div>
 
-                    <span
-                      style={{
-                        fontSize: "14px",
-                        fontWeight: "700",
-                        color: "var(--accent)",
-                      }}
-                    >
-                      Rs.{" "}
-                      {(p.salePrice || p.price).toLocaleString()}
+                    <span className="related-product-price">
+                      Rs. {(p.salePrice || p.price).toLocaleString()}
                     </span>
                   </div>
                 </Link>
@@ -1211,9 +1158,93 @@ function ProductContent() {
       </div>
 
       <style jsx>{`
+        /* RELATED PRODUCTS */
+
+        .related-products-section {
+          width: 100%;
+          min-width: 0;
+          margin-top: 32px;
+        }
+
+        .related-products-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 14px;
+          width: 100%;
+        }
+
+        .related-product-card {
+          display: flex;
+          flex-direction: column;
+          min-width: 0;
+          overflow: hidden;
+          text-decoration: none;
+        }
+
+        .related-product-image {
+          position: relative;
+          width: 100%;
+          aspect-ratio: 1 / 1;
+          overflow: hidden;
+          background: var(--bg-alt);
+        }
+
+        .related-product-image img {
+          width: 100%;
+          height: 100%;
+          display: block;
+          object-fit: contain;
+        }
+
+        .related-product-info {
+          padding: 12px;
+          min-width: 0;
+        }
+
+        .related-product-name {
+          font-size: 13px;
+          line-height: 18px;
+          min-height: 36px;
+          margin-bottom: 8px;
+          color: var(--text-primary);
+          overflow-wrap: anywhere;
+        }
+
+        .related-product-rating {
+          display: flex;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 5px;
+          margin-bottom: 8px;
+          font-size: 11px;
+          color: var(--text-muted);
+        }
+
+        .related-product-price {
+          display: block;
+          font-size: 15px;
+          font-weight: 700;
+          color: var(--accent);
+          overflow-wrap: anywhere;
+        }
+
+        .related-stock-badge {
+          position: absolute;
+          bottom: 8px;
+          left: 8px;
+          background: #DC2626;
+          color: #fff;
+          font-size: 10px;
+          font-weight: 600;
+          padding: 5px 8px;
+          border-radius: 3px;
+        }
+
+        /* DESKTOP */
+
         @media (min-width: 768px) {
           .product-detail-grid {
-            grid-template-columns: 1fr 1fr !important;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
           }
 
           .product-gallery {
@@ -1221,18 +1252,51 @@ function ProductContent() {
             width: 100%;
             margin: 0 auto;
           }
+
+          .related-products-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 16px;
+          }
         }
 
+        /* MOBILE */
+
         @media (max-width: 767px) {
+          .product-detail-grid {
+            grid-template-columns: minmax(0, 1fr) !important;
+            padding: 14px !important;
+            gap: 20px !important;
+            width: 100%;
+            box-sizing: border-box;
+          }
+
+          .product-detail-grid > * {
+            min-width: 0;
+          }
+
           .product-gallery {
             max-width: 340px;
             width: 100%;
             margin: 0 auto;
           }
 
-          .product-detail-grid {
-            padding: 16px !important;
-            gap: 24px !important;
+          .related-products-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+          }
+
+          .related-product-info {
+            padding: 9px;
+          }
+
+          .related-product-name {
+            font-size: 12px;
+            line-height: 17px;
+            min-height: 34px;
+          }
+
+          .related-product-price {
+            font-size: 13px;
           }
         }
       `}</style>

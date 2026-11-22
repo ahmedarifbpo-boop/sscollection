@@ -19,6 +19,7 @@ import {
   RefreshCcw,
   FileText,
   ChevronRight,
+  ChevronLeft,
 } from "lucide-react";
 import { useCart } from "@/lib/cart";
 import { useChat } from "@/lib/chat";
@@ -34,7 +35,7 @@ const iconMap: Record<string, any> = {
   Baby,
 };
 
-interface Product {
+export interface Product {
   id: string;
   name: string;
   description: string;
@@ -42,6 +43,7 @@ interface Product {
   price: number;
   salePrice: number | null;
   stock: number;
+  isManuallyOutOfStock?: boolean;
   image: string;
   images?: string[];
   video?: string | null;
@@ -78,10 +80,14 @@ export default function HomeClient({
   const [activeCategory, setActiveCategory] = useState("All");
   const [products, setProducts] = useState<Product[]>(initialProducts);
 
-  // Shared chat opener
+  // Skeleton only appears when initial product data is empty.
+  const [isProductsLoading, setIsProductsLoading] = useState(
+    initialProducts.length === 0
+  );
+
+  const justForYouRef = useRef<HTMLDivElement>(null);
   const { openChat } = useChat();
 
-  // Automatically refresh products every 5 seconds
   useEffect(() => {
     let isMounted = true;
 
@@ -100,6 +106,10 @@ export default function HomeClient({
         }
       } catch (error) {
         console.error("Products refresh error:", error);
+      } finally {
+        if (isMounted) {
+          setIsProductsLoading(false);
+        }
       }
     };
 
@@ -113,19 +123,71 @@ export default function HomeClient({
     };
   }, []);
 
-  // API already returns newest products first.
+  useEffect(() => {
+    justForYouRef.current?.scrollTo({
+      left: 0,
+      behavior: "smooth",
+    });
+  }, [activeCategory]);
+
+  // First 8 products are New Arrivals.
   const newArrivals = products.slice(0, 8);
   const justForYou = products.slice(8);
 
   const filteredJustForYou =
     activeCategory === "All"
       ? justForYou
-      : justForYou.filter((product) => product.category === activeCategory);
+      : justForYou.filter(
+          (product) => product.category === activeCategory
+        );
 
   const filteredNewArrivals =
     activeCategory === "All"
       ? newArrivals
-      : newArrivals.filter((product) => product.category === activeCategory);
+      : newArrivals.filter(
+          (product) => product.category === activeCategory
+        );
+
+  // Show maximum 9 products in the home slider.
+  const sliderProducts = filteredJustForYou.slice(0, 9);
+
+  const slideJustForYou = (direction: "left" | "right") => {
+    const track = justForYouRef.current;
+    if (!track) return;
+
+    const card = track.querySelector<HTMLElement>(
+      ".just-for-you-card"
+    );
+
+    const cardWidth = card?.getBoundingClientRect().width || 210;
+    const gap = 14;
+
+    track.scrollBy({
+      left:
+        direction === "right"
+          ? (cardWidth + gap) * 2
+          : -(cardWidth + gap) * 2,
+      behavior: "smooth",
+    });
+  };
+
+  // Reusable skeleton cards.
+  const renderSkeletonCards = (count: number, className: string) =>
+    Array.from({ length: count }).map((_, index) => (
+      <div className={className} key={`skeleton-${index}`}>
+        <div className="skeleton-product-card">
+          <div className="skeleton-product-image skeleton-shimmer" />
+
+          <div className="skeleton-product-content">
+            <div className="skeleton-line skeleton-title skeleton-shimmer" />
+            <div className="skeleton-line skeleton-title-short skeleton-shimmer" />
+            <div className="skeleton-line skeleton-price skeleton-shimmer" />
+            <div className="skeleton-line skeleton-rating skeleton-shimmer" />
+            <div className="skeleton-button skeleton-shimmer" />
+          </div>
+        </div>
+      </div>
+    ));
 
   return (
     <div className="home-page">
@@ -134,7 +196,9 @@ export default function HomeClient({
       <div className="home-category-strip">
         <button
           onClick={() => setActiveCategory("All")}
-          className={activeCategory === "All" ? "home-category-active" : ""}
+          className={
+            activeCategory === "All" ? "home-category-active" : ""
+          }
         >
           All
         </button>
@@ -144,7 +208,9 @@ export default function HomeClient({
             key={cat.id}
             onClick={() => setActiveCategory(cat.name)}
             className={
-              activeCategory === cat.name ? "home-category-active" : ""
+              activeCategory === cat.name
+                ? "home-category-active"
+                : ""
             }
           >
             {cat.name}
@@ -167,12 +233,18 @@ export default function HomeClient({
               <p>Discover our latest additions</p>
             </div>
 
-            <span className="section-count">
-              {filteredNewArrivals.length} items
-            </span>
+            {!isProductsLoading && (
+              <span className="section-count">
+                {filteredNewArrivals.length} items
+              </span>
+            )}
           </div>
 
-          {filteredNewArrivals.length === 0 ? (
+          {isProductsLoading ? (
+            <div className="new-arrivals-track">
+              {renderSkeletonCards(8, "new-arrival-card")}
+            </div>
+          ) : filteredNewArrivals.length === 0 ? (
             <div className="home-empty">
               No new arrivals available.
             </div>
@@ -192,7 +264,9 @@ export default function HomeClient({
         <section className="home-section">
           <div className="home-section-heading centered-heading">
             <div>
-              <span className="section-eyebrow">EXPLORE OUR COLLECTION</span>
+              <span className="section-eyebrow">
+                EXPLORE OUR COLLECTION
+              </span>
               <h2>Shop by Category</h2>
               <p>Find exactly what you are looking for</p>
             </div>
@@ -219,42 +293,84 @@ export default function HomeClient({
                   </div>
 
                   <span>{cat.name}</span>
-                  <ChevronRight size={14} className="category-arrow" />
+                  <ChevronRight
+                    size={14}
+                    className="category-arrow"
+                  />
                 </button>
               );
             })}
           </div>
         </section>
 
-        {/* JUST FOR YOU */}
+        {/* JUST FOR YOU SLIDER */}
 
         <section className="home-section just-for-you-section">
-          <div className="home-section-heading">
+          <div className="just-for-you-heading">
             <div>
-              <span className="section-eyebrow">HANDPICKED FOR YOU</span>
+              <span className="section-eyebrow">
+                HANDPICKED FOR YOU
+              </span>
+
               <h2>
                 {activeCategory === "All"
                   ? "Just For You"
                   : activeCategory}
               </h2>
+
               <p>Explore more products from our collection</p>
             </div>
 
-            <span className="section-count">
-              {filteredJustForYou.length} items
-            </span>
+            <div className="just-for-you-actions">
+              <Link
+                href="/just-for-you"
+                className="view-more-button"
+              >
+                View More <ChevronRight size={16} />
+              </Link>
+
+              <div className="slider-controls">
+                <button
+                  type="button"
+                  onClick={() => slideJustForYou("left")}
+                  aria-label="Previous products"
+                >
+                  <ChevronLeft size={19} />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => slideJustForYou("right")}
+                  aria-label="Next products"
+                >
+                  <ChevronRight size={19} />
+                </button>
+              </div>
+            </div>
           </div>
 
-          {filteredJustForYou.length === 0 ? (
+          {isProductsLoading ? (
+            <div className="just-for-you-track">
+              {renderSkeletonCards(6, "just-for-you-card")}
+            </div>
+          ) : filteredJustForYou.length === 0 ? (
             <div className="home-empty">
               {justForYou.length === 0
                 ? "More products will appear here as new arrivals are added."
                 : "No products found in this category."}
             </div>
           ) : (
-            <div className="home-products-grid">
-              {filteredJustForYou.map((product) => (
-                <ProductCard key={product.id} product={product} />
+            <div
+              className="just-for-you-track"
+              ref={justForYouRef}
+            >
+              {sliderProducts.map((product) => (
+                <div
+                  className="just-for-you-card"
+                  key={product.id}
+                >
+                  <ProductCard product={product} />
+                </div>
               ))}
             </div>
           )}
@@ -324,6 +440,7 @@ export default function HomeClient({
           width: 100%;
           min-height: 100vh;
           padding-bottom: 30px;
+          overflow-x: hidden;
         }
 
         .home-category-strip {
@@ -343,7 +460,8 @@ export default function HomeClient({
         }
 
         .home-category-strip::-webkit-scrollbar,
-        .new-arrivals-track::-webkit-scrollbar {
+        .new-arrivals-track::-webkit-scrollbar,
+        .just-for-you-track::-webkit-scrollbar {
           display: none;
         }
 
@@ -356,6 +474,7 @@ export default function HomeClient({
           color: var(--text-secondary);
           font-size: 13px;
           font-weight: 500;
+          cursor: pointer;
           transition: 0.2s ease;
         }
 
@@ -370,12 +489,14 @@ export default function HomeClient({
           max-width: 1320px;
           margin: 0 auto;
           padding: 22px 24px;
+          box-sizing: border-box;
         }
 
         .home-section {
           width: 100%;
           max-width: 1240px;
           margin: 0 auto 42px;
+          min-width: 0;
         }
 
         .home-section-heading {
@@ -386,7 +507,8 @@ export default function HomeClient({
           margin-bottom: 20px;
         }
 
-        .home-section-heading h2 {
+        .home-section-heading h2,
+        .just-for-you-heading h2 {
           margin: 5px 0;
           color: var(--text-primary);
           font-size: 25px;
@@ -394,7 +516,8 @@ export default function HomeClient({
           letter-spacing: -0.7px;
         }
 
-        .home-section-heading p {
+        .home-section-heading p,
+        .just-for-you-heading p {
           margin: 0;
           color: var(--text-muted);
           font-size: 13px;
@@ -471,6 +594,7 @@ export default function HomeClient({
           color: var(--text-primary);
           font-size: 13px;
           font-weight: 600;
+          cursor: pointer;
           transition: transform 0.2s ease, border-color 0.2s ease,
             box-shadow 0.2s ease;
         }
@@ -500,13 +624,6 @@ export default function HomeClient({
           color: #bbb;
         }
 
-        .home-products-grid {
-          width: 100%;
-          display: grid;
-          grid-template-columns: repeat(5, minmax(0, 1fr));
-          gap: 16px;
-        }
-
         .home-empty {
           width: 100%;
           padding: 45px 20px;
@@ -516,6 +633,187 @@ export default function HomeClient({
           color: var(--text-muted);
           font-size: 14px;
           text-align: center;
+          box-sizing: border-box;
+        }
+
+        /* SKELETON LOADING */
+
+        .skeleton-product-card {
+          height: 100%;
+          min-width: 0;
+          overflow: hidden;
+          display: flex;
+          flex-direction: column;
+          border: 1px solid var(--border);
+          border-radius: 10px;
+          background: var(--surface, #fff);
+        }
+
+        .skeleton-shimmer {
+          position: relative;
+          overflow: hidden;
+          background: #eeeeee;
+        }
+
+        .skeleton-shimmer::after {
+          position: absolute;
+          top: 0;
+          right: 0;
+          bottom: 0;
+          left: 0;
+          content: "";
+          transform: translateX(-100%);
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(255, 255, 255, 0.72),
+            transparent
+          );
+          animation: skeleton-shimmer 1.35s infinite;
+        }
+
+        @keyframes skeleton-shimmer {
+          100% {
+            transform: translateX(100%);
+          }
+        }
+
+        .skeleton-product-image {
+          width: 100%;
+          aspect-ratio: 1 / 1;
+          flex-shrink: 0;
+        }
+
+        .skeleton-product-content {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          gap: 9px;
+          padding: 10px;
+        }
+
+        .skeleton-line {
+          height: 10px;
+          border-radius: 5px;
+        }
+
+        .skeleton-title {
+          width: 92%;
+        }
+
+        .skeleton-title-short {
+          width: 62%;
+        }
+
+        .skeleton-price {
+          width: 48%;
+          height: 13px;
+          margin-top: 3px;
+        }
+
+        .skeleton-rating {
+          width: 38%;
+          height: 9px;
+        }
+
+        .skeleton-button {
+          width: 100%;
+          height: 29px;
+          margin-top: auto;
+          border-radius: 5px;
+        }
+
+        /* JUST FOR YOU SLIDER */
+
+        .just-for-you-section {
+          padding: 24px;
+          border: 1px solid var(--border);
+          border-radius: 15px;
+          background: var(--surface);
+          box-shadow: 0 5px 22px rgba(0, 0, 0, 0.035);
+          box-sizing: border-box;
+        }
+
+        .just-for-you-heading {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-end;
+          gap: 15px;
+          margin-bottom: 20px;
+        }
+
+        .just-for-you-actions {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex-shrink: 0;
+        }
+
+        .view-more-button {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 5px;
+          padding: 9px 15px;
+          border-radius: 5px;
+          background: var(--accent);
+          color: #fff;
+          text-decoration: none;
+          font-size: 12px;
+          font-weight: 700;
+          white-space: nowrap;
+          transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+
+        .view-more-button:hover {
+          opacity: 0.9;
+          transform: translateY(-1px);
+        }
+
+        .slider-controls {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+        }
+
+        .slider-controls button {
+          width: 34px;
+          height: 34px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid var(--border);
+          border-radius: 50%;
+          background: var(--surface);
+          color: var(--text-primary);
+          cursor: pointer;
+          transition: 0.2s ease;
+        }
+
+        .slider-controls button:hover {
+          color: #fff;
+          border-color: var(--accent);
+          background: var(--accent);
+        }
+
+        .just-for-you-track {
+          display: flex;
+          align-items: stretch;
+          gap: 14px;
+          width: 100%;
+          overflow-x: auto;
+          overflow-y: hidden;
+          padding: 3px 2px 12px;
+          scroll-snap-type: x mandatory;
+          scroll-behavior: smooth;
+          scrollbar-width: none;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        .just-for-you-card {
+          flex: 0 0 210px;
+          min-width: 0;
+          scroll-snap-align: start;
         }
 
         .home-footer {
@@ -524,6 +822,7 @@ export default function HomeClient({
           padding: 45px 24px 0;
           background: #171717;
           color: #fff;
+          box-sizing: border-box;
         }
 
         .home-footer-inner {
@@ -571,6 +870,7 @@ export default function HomeClient({
           gap: 9px;
           color: #aaa;
           font-size: 13px;
+          text-decoration: none;
           transition: color 0.2s ease;
         }
 
@@ -636,7 +936,8 @@ export default function HomeClient({
             margin-bottom: 30px;
           }
 
-          .home-section-heading h2 {
+          .home-section-heading h2,
+          .just-for-you-heading h2 {
             font-size: 21px;
           }
 
@@ -665,9 +966,31 @@ export default function HomeClient({
             height: 42px;
           }
 
-          .home-products-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 10px;
+          .just-for-you-section {
+            padding: 16px 12px;
+            border-radius: 12px;
+          }
+
+          .just-for-you-heading {
+            align-items: center;
+            gap: 8px;
+          }
+
+          .just-for-you-actions {
+            gap: 7px;
+          }
+
+          .view-more-button {
+            padding: 8px 10px;
+            font-size: 11px;
+          }
+
+          .slider-controls {
+            display: none;
+          }
+
+          .just-for-you-card {
+            flex-basis: 165px;
           }
 
           .home-footer {
@@ -690,8 +1013,24 @@ export default function HomeClient({
           }
         }
 
+        @media (max-width: 480px) {
+          .just-for-you-heading {
+            flex-wrap: wrap;
+            align-items: flex-end;
+          }
+
+          .just-for-you-actions {
+            margin-left: auto;
+          }
+
+          .just-for-you-card {
+            flex-basis: 155px;
+          }
+        }
+
         @media (max-width: 380px) {
-          .home-section-heading h2 {
+          .home-section-heading h2,
+          .just-for-you-heading h2 {
             font-size: 19px;
           }
 
@@ -701,6 +1040,10 @@ export default function HomeClient({
 
           .home-category-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .just-for-you-card {
+            flex-basis: 145px;
           }
         }
       `}</style>
@@ -828,9 +1171,9 @@ function HeroSlider({ offers }: { offers: Offer[] }) {
   );
 }
 
-/* ===== PRODUCT CARD WITH IMAGE + VIDEO SLIDER ===== */
+/* ===== REUSABLE PRODUCT CARD ===== */
 
-function ProductCard({ product }: { product: Product }) {
+export function ProductCard({ product }: { product: Product }) {
   const { addToCart } = useCart();
 
   const cardRef = useRef<HTMLDivElement>(null);
@@ -872,16 +1215,13 @@ function ProductCard({ product }: { product: Product }) {
 
   useEffect(() => {
     const element = cardRef.current;
-
     if (!element) return;
 
     const observer = new IntersectionObserver(
       ([entry]) => {
         setIsVisible(entry.isIntersecting);
       },
-      {
-        threshold: 0.5,
-      }
+      { threshold: 0.5 }
     );
 
     observer.observe(element);
@@ -901,15 +1241,11 @@ function ProductCard({ product }: { product: Product }) {
 
   useEffect(() => {
     const video = videoRef.current;
-
     if (!video) return;
 
     if (isVisible && isVideo) {
       video.muted = true;
-
-      video.play().catch(() => {
-        // Browser autoplay restriction
-      });
+      video.play().catch(() => {});
     } else {
       video.pause();
     }
@@ -1201,10 +1537,7 @@ function ProductCard({ product }: { product: Product }) {
           >
             <Star
               size={10}
-              style={{
-                fill: "#FFB800",
-                color: "#FFB800",
-              }}
+              style={{ fill: "#FFB800", color: "#FFB800" }}
             />
 
             <span style={{ fontSize: "10px", color: "#555" }}>
