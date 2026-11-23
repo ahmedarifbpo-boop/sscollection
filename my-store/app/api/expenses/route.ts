@@ -3,16 +3,39 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAdminRequest } from "@/lib/admin-auth";
 
-// GET /api/expenses — Admin expense history
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const VALID_TYPES = ["ADS", "PACKAGING", "OTHER"] as const;
+
+function getPakistanDateRange(dateString: string, endOfDay = false) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+    return null;
+  }
+
+  const date = new Date(
+    `${dateString}T${endOfDay ? "23:59:59.999" : "00:00:00"}+05:00`
+  );
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date;
+}
+
+function errorResponse(message: string, status: number) {
+  return NextResponse.json({ error: message }, { status });
+}
+
+// GET /api/expenses
+// Admin expense history
 export async function GET(request: Request) {
   try {
     const auth = await verifyAdminRequest(request);
 
     if (!auth) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return errorResponse("Unauthorized", 401);
     }
 
     const { searchParams } = new URL(request.url);
@@ -28,13 +51,10 @@ export async function GET(request: Request) {
     } = {};
 
     if (from) {
-      const fromDate = new Date(from);
+      const fromDate = getPakistanDateRange(from);
 
-      if (Number.isNaN(fromDate.getTime())) {
-        return NextResponse.json(
-          { error: "Invalid start date" },
-          { status: 400 }
-        );
+      if (!fromDate) {
+        return errorResponse("Invalid start date", 400);
       }
 
       where.date = {
@@ -44,19 +64,23 @@ export async function GET(request: Request) {
     }
 
     if (to) {
-      const toDate = new Date(to);
+      const toDate = getPakistanDateRange(to, true);
 
-      if (Number.isNaN(toDate.getTime())) {
-        return NextResponse.json(
-          { error: "Invalid end date" },
-          { status: 400 }
-        );
+      if (!toDate) {
+        return errorResponse("Invalid end date", 400);
       }
 
       where.date = {
         ...where.date,
         lte: toDate,
       };
+    }
+
+    if (from && to && from > to) {
+      return errorResponse(
+        "Start date cannot be after end date",
+        400
+      );
     }
 
     const expenses = await prisma.expenseRecord.findMany({
@@ -68,7 +92,7 @@ export async function GET(request: Request) {
     });
 
     return NextResponse.json(
-      { expenses },
+      { success: true, expenses },
       {
         headers: {
           "Cache-Control": "no-store, no-cache, must-revalidate",
@@ -78,50 +102,53 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error("GET /api/expenses error:", error);
 
-    return NextResponse.json(
-      { error: "Failed to fetch expenses" },
-      { status: 500 }
-    );
+    return errorResponse("Failed to fetch expenses", 500);
   }
 }
 
-// POST /api/expenses — Add new expense
+// POST /api/expenses
+// Add new expense
 export async function POST(request: Request) {
   try {
     const auth = await verifyAdminRequest(request);
 
     if (!auth) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return errorResponse("Unauthorized", 401);
     }
 
-    const body = await request.json();
+    let body: unknown;
 
-    if (!body || typeof body !== "object" || Array.isArray(body)) {
-      return NextResponse.json(
-        { error: "Invalid request body" },
-        { status: 400 }
-      );
+    try {
+      body = await request.json();
+    } catch {
+      return errorResponse("Invalid JSON request body", 400);
     }
 
-    const { date, type, amount, note } = body;
+    if (
+      !body ||
+      typeof body !== "object" ||
+      Array.isArray(body)
+    ) {
+      return errorResponse("Invalid request body", 400);
+    }
+
+    const data = body as {
+      date?: unknown;
+      type?: unknown;
+      amount?: unknown;
+      note?: unknown;
+    };
+
+    const { date, type, amount, note } = data;
 
     if (typeof type !== "string" || !type.trim()) {
-      return NextResponse.json(
-        { error: "Expense type is required" },
-        { status: 400 }
-      );
+      return errorResponse("Expense type is required", 400);
     }
 
-    const validTypes = ["ADS", "PACKAGING", "OTHER"];
+    const normalizedType = type.trim().toUpperCase();
 
-    if (!validTypes.includes(type.trim().toUpperCase())) {
-      return NextResponse.json(
-        { error: "Invalid expense type" },
-        { status: 400 }
-      );
+    if (!VALID_TYPES.includes(normalizedType as typeof VALID_TYPES[number])) {
+      return errorResponse("Invalid expense type", 400);
     }
 
     const expenseAmount = Number(amount);
@@ -130,20 +157,29 @@ export async function POST(request: Request) {
       !Number.isFinite(expenseAmount) ||
       expenseAmount <= 0
     ) {
-      return NextResponse.json(
-        { error: "Amount must be a positive number" },
-        { status: 400 }
+      return errorResponse(
+        "Amount must be a positive number",
+        400
       );
     }
 
-    const expenseDate =
-      date !== undefined ? new Date(date) : new Date();
+    let expenseDate: Date;
 
-    if (Number.isNaN(expenseDate.getTime())) {
-      return NextResponse.json(
-        { error: "Invalid expense date" },
-        { status: 400 }
-      );
+    if (date === undefined || date === null || date === "") {
+      expenseDate = new Date();
+    } else if (typeof date === "string") {
+      // Date-only values are interpreted in Pakistan time.
+      const parsedDate = /^\d{4}-\d{2}-\d{2}$/.test(date)
+        ? getPakistanDateRange(date)
+        : new Date(date);
+
+      if (!parsedDate || Number.isNaN(parsedDate.getTime())) {
+        return errorResponse("Invalid expense date", 400);
+      }
+
+      expenseDate = parsedDate;
+    } else {
+      return errorResponse("Invalid expense date", 400);
     }
 
     if (
@@ -151,34 +187,38 @@ export async function POST(request: Request) {
       note !== null &&
       typeof note !== "string"
     ) {
-      return NextResponse.json(
-        { error: "Note must be text" },
-        { status: 400 }
-      );
+      return errorResponse("Note must be text", 400);
     }
+
+    const cleanNote =
+      typeof note === "string" && note.trim()
+        ? note.trim().slice(0, 2000)
+        : null;
 
     const expense = await prisma.expenseRecord.create({
       data: {
         date: expenseDate,
-        type: type.trim().toUpperCase(),
+        type: normalizedType,
         amount: expenseAmount,
-        note:
-          typeof note === "string" && note.trim()
-            ? note.trim()
-            : null,
+        note: cleanNote,
       },
     });
 
     return NextResponse.json(
-      { success: true, expense },
-      { status: 201 }
+      {
+        success: true,
+        expense,
+      },
+      {
+        status: 201,
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      }
     );
   } catch (error) {
     console.error("POST /api/expenses error:", error);
 
-    return NextResponse.json(
-      { error: "Failed to create expense" },
-      { status: 500 }
-    );
+    return errorResponse("Failed to create expense", 500);
   }
 }

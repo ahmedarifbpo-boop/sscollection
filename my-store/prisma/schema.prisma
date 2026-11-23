@@ -37,6 +37,7 @@ model Product {
 
   orderItems           OrderItem[]
   reviewsData          Review[]
+  expenseSheetRows     ExpenseSheetRow[]
 
   @@index([category])
   @@index([slug])
@@ -328,4 +329,73 @@ model ExpenseRecord {
 
   @@index([date])
   @@index([type])
+}
+
+// ============ EXPENSE SHEET ROWS ============
+
+model ExpenseSheetRow {
+  id                String   @id @default(cuid())
+  date              DateTime
+
+  productId         String?
+  product           Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  productName       String   @default("")
+  actualPrice       Float    @default(0)
+  websitePrice      Float    @default(0)
+
+  personalExpense   Float    @default(0)
+  businessExpense   Float    @default(0)
+
+  discountSalePrice Float    @default(0)
+  discountQuantity  Int      @default(0)
+
+  note              String?
+  customValues      Json?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([date, productId])
+  @@index([date])
+  @@index([productId])
+}
+
+// ============ EXPENSE SHEET SETTINGS ============
+
+model ExpenseSheetSettings {
+  id                   String   @id @default("main")
+  accountBalance       Float    @default(0)
+  actualCountedBalance Float    @default(0)
+  updatedAt            DateTime @updatedAt
+}
+
+// ============ EXPENSE SHEET PAYMENTS ============
+
+model ExpenseSheetPayment {
+  id        String   @id @default(cuid())
+  person    String
+  amount    Float
+  date      DateTime @default(now())
+  note      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([person, date])
+}
+
+// ============ EXPENSE SHEET CUSTOM COLUMNS ============
+
+model ExpenseSheetColumn {
+  id        String   @id @default(cuid())
+  name      String
+  kind      String   @default("TEXT")
+  formula   String?
+  position  Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([position])
 }
