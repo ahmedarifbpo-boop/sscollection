@@ -347,6 +347,9 @@ model ExpenseSheetRow {
   personalExpense   Float    @default(0)
   businessExpense   Float    @default(0)
 
+  fuelCharges       Float    @default(0)
+  deliveryCharges   Float    @default(0)
+
   discountSalePrice Float    @default(0)
   discountQuantity  Int      @default(0)
 

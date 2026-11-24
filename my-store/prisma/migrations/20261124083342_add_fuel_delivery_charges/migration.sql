@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "ExpenseSheetRow" ADD COLUMN     "deliveryCharges" DOUBLE PRECISION NOT NULL DEFAULT 0,
+ADD COLUMN     "fuelCharges" DOUBLE PRECISION NOT NULL DEFAULT 0;
