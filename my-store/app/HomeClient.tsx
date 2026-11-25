@@ -1,9 +1,9 @@
-
 "use client";
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import Script from "next/script";
 import {
   Shirt,
   Smartphone,
@@ -68,6 +68,66 @@ interface Offer {
   ctaLink: string;
 }
 
+/* ===== ADSTERRA SETTINGS ===== */
+
+// Set to false to hide the ad completely.
+const ADS_ENABLED = true;
+
+// Social Bar (floating notification-style ad, takes no page space).
+const SOCIAL_BAR_ENABLED = true;
+const SOCIAL_BAR_SRC =
+  "https://bauval.org/14/5611a03205d92b1bff3c1c559e2859b9";
+
+const ADSTERRA_CODE = `
+<script>
+  atOptions = {
+    'key' : '6ac1bfaa862232cf9a6a114abfd8404f',
+    'format' : 'iframe',
+    'height' : 600,
+    'width' : 160,
+    'params' : {}
+  };
+</script>
+<script data-cfasync="false" src="https://bauval.org/22/6ac1bfaa862232cf9a6a114abfd8404f"></script>
+`;
+
+/* ===== ADSTERRA CODE PARSER ===== */
+
+function parseAdsterraCode(code: string) {
+  if (!code || !code.trim()) return null;
+
+  // Any https:// (or protocol-relative //) script URL
+  const rawScriptUrl = code.match(
+    /src\s*=\s*["']((?:https:)?\/\/[^"']+)["']/i
+  )?.[1];
+
+  const scriptUrl = rawScriptUrl
+    ? rawScriptUrl.startsWith("//")
+      ? `https:${rawScriptUrl}`
+      : rawScriptUrl
+    : undefined;
+
+  const key = code.match(
+    /['"]key['"]\s*:\s*['"]([a-f0-9]{32})['"]/i
+  )?.[1];
+
+  const width = Number(
+    code.match(/['"]width['"]\s*:\s*(\d+)/i)?.[1] || 160
+  );
+
+  const height = Number(
+    code.match(/['"]height['"]\s*:\s*(\d+)/i)?.[1] || 600
+  );
+
+  const allowedSizes = ["160x600", "300x250", "320x50", "320x100", "468x60", "728x90"];
+
+  if (!scriptUrl || !key || !allowedSizes.includes(`${width}x${height}`)) {
+    return null;
+  }
+
+  return { scriptUrl, key, width, height };
+}
+
 export default function HomeClient({
   initialProducts,
   initialCategories,
@@ -80,8 +140,6 @@ export default function HomeClient({
   const [activeCategory, setActiveCategory] = useState("All");
   const [products, setProducts] = useState<Product[]>(initialProducts);
 
-  const [adsterraEnabled, setAdsterraEnabled] = useState(false);
-  const [adsterraCode, setAdsterraCode] = useState("");
 
   const [isProductsLoading, setIsProductsLoading] = useState(
     initialProducts.length === 0
@@ -89,6 +147,12 @@ export default function HomeClient({
 
   const justForYouRef = useRef<HTMLDivElement>(null);
   const { openChat } = useChat();
+
+  const showAd = ADS_ENABLED && parseAdsterraCode(ADSTERRA_CODE) !== null;
+
+  // Becomes true only when the ad has really loaded inside the iframe.
+  // Until then the ad takes NO space on the page.
+  const [adLoaded, setAdLoaded] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -122,40 +186,6 @@ export default function HomeClient({
     return () => {
       isMounted = false;
       clearInterval(interval);
-    };
-  }, []);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const fetchAdSettings = async () => {
-      try {
-        const response = await fetch("/api/settings", {
-          cache: "no-store",
-        });
-
-        if (!response.ok) return;
-
-        const data = await response.json();
-        const settings = data.settings;
-
-        if (isMounted && settings) {
-          setAdsterraEnabled(settings.adsterraEnabled === true);
-          setAdsterraCode(
-            typeof settings.adsterraCode === "string"
-              ? settings.adsterraCode
-              : ""
-          );
-        }
-      } catch (error) {
-        console.error("Adsterra settings error:", error);
-      }
-    };
-
-    fetchAdSettings();
-
-    return () => {
-      isMounted = false;
     };
   }, []);
 
@@ -210,7 +240,6 @@ export default function HomeClient({
       <div className={className} key={`skeleton-${index}`}>
         <div className="skeleton-product-card">
           <div className="skeleton-product-image skeleton-shimmer" />
-
           <div className="skeleton-product-content">
             <div className="skeleton-line skeleton-title skeleton-shimmer" />
             <div className="skeleton-line skeleton-title-short skeleton-shimmer" />
@@ -224,6 +253,15 @@ export default function HomeClient({
 
   return (
     <div className="home-page">
+      {SOCIAL_BAR_ENABLED && (
+        <Script
+          id="adsterra-social-bar"
+          src={SOCIAL_BAR_SRC}
+          strategy="afterInteractive"
+          data-cfasync="false"
+        />
+      )}
+
       <div className="home-category-strip">
         <button
           onClick={() => setActiveCategory("All")}
@@ -286,7 +324,7 @@ export default function HomeClient({
           )}
         </section>
 
-        <section className="home-section">
+        <section className="home-section category-section">
           <div className="home-section-heading centered-heading">
             <div>
               <span className="section-eyebrow">
@@ -297,7 +335,11 @@ export default function HomeClient({
             </div>
           </div>
 
-          <div className="category-content-layout">
+          <div
+            className={`category-content-layout ${
+              showAd && adLoaded ? "with-ad" : ""
+            }`}
+          >
             <div className="home-category-grid">
               {initialCategories.map((cat) => {
                 const Icon = cat.icon ? iconMap[cat.icon] : null;
@@ -329,9 +371,16 @@ export default function HomeClient({
               })}
             </div>
 
-            {adsterraEnabled && adsterraCode.trim() && (
-              <div className="category-ad-container">
-                <AdsterraBanner code={adsterraCode} />
+            {showAd && (
+              <div
+                className={`category-ad-container ${
+                  adLoaded ? "" : "ad-pending"
+                }`}
+              >
+                <AdsterraBanner
+                  code={ADSTERRA_CODE}
+                  onLoaded={() => setAdLoaded(true)}
+                />
               </div>
             )}
           </div>
@@ -525,7 +574,7 @@ export default function HomeClient({
         .home-section {
           width: 100%;
           max-width: 1240px;
-          margin: 0 auto 42px;
+          margin: 0 auto 22px;
           min-width: 0;
         }
 
@@ -534,7 +583,7 @@ export default function HomeClient({
           justify-content: space-between;
           align-items: flex-end;
           gap: 15px;
-          margin-bottom: 20px;
+          margin-bottom: 16px;
         }
 
         .home-section-heading h2,
@@ -600,14 +649,19 @@ export default function HomeClient({
           scroll-snap-align: start;
         }
 
-        /* SHOP BY CATEGORY + ADSTERRA */
+        /* ===== CATEGORY + AD LAYOUT ===== */
 
         .category-content-layout {
           width: 100%;
           display: grid;
-          grid-template-columns: minmax(0, 1fr) 160px;
+          grid-template-columns: minmax(0, 1fr);
           align-items: start;
-          gap: 25px;
+          gap: 20px;
+        }
+
+        /* Two columns only when a valid ad is present */
+        .category-content-layout.with-ad {
+          grid-template-columns: minmax(0, 1fr) 160px;
         }
 
         .category-content-layout .home-category-grid {
@@ -621,11 +675,21 @@ export default function HomeClient({
 
         .category-ad-container {
           width: 160px;
-          min-height: 600px;
+          height: 600px;
           display: flex;
           justify-content: center;
           align-items: flex-start;
           overflow: hidden;
+        }
+
+        /* Ad is loading (or never loaded): keep it out of the layout */
+        .category-ad-container.ad-pending {
+          position: absolute;
+          top: 0;
+          left: -9999px;
+          width: 160px;
+          height: 600px;
+          pointer-events: none;
         }
 
         .home-category-card {
@@ -684,8 +748,6 @@ export default function HomeClient({
           text-align: center;
           box-sizing: border-box;
         }
-
-        /* SKELETON LOADING */
 
         .skeleton-product-card {
           height: 100%;
@@ -772,8 +834,6 @@ export default function HomeClient({
           border-radius: 5px;
         }
 
-        /* JUST FOR YOU SLIDER */
-
         .just-for-you-section {
           padding: 24px;
           border: 1px solid var(--border);
@@ -788,7 +848,7 @@ export default function HomeClient({
           justify-content: space-between;
           align-items: flex-end;
           gap: 15px;
-          margin-bottom: 20px;
+          margin-bottom: 16px;
         }
 
         .just-for-you-actions {
@@ -865,11 +925,9 @@ export default function HomeClient({
           scroll-snap-align: start;
         }
 
-        /* FOOTER */
-
         .home-footer {
           width: 100%;
-          margin-top: 45px;
+          margin-top: 30px;
           padding: 45px 24px 0;
           background: #171717;
           color: #fff;
@@ -967,10 +1025,6 @@ export default function HomeClient({
         }
 
         @media (max-width: 1100px) {
-          .home-products-grid {
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-          }
-
           .category-content-layout {
             gap: 16px;
           }
@@ -988,7 +1042,7 @@ export default function HomeClient({
           }
 
           .home-section {
-            margin-bottom: 30px;
+            margin-bottom: 20px;
           }
 
           .home-section-heading h2,
@@ -1005,10 +1059,12 @@ export default function HomeClient({
             flex-basis: 165px;
           }
 
-          .category-content-layout {
+          /* Single column on mobile, ad shown below categories */
+          .category-content-layout,
+          .category-content-layout.with-ad {
             grid-template-columns: minmax(0, 1fr);
             justify-items: center;
-            gap: 18px;
+            gap: 14px;
           }
 
           .category-content-layout .home-category-grid {
@@ -1029,10 +1085,17 @@ export default function HomeClient({
             height: 34px;
           }
 
+          .category-ad-container.ad-pending {
+            width: 160px;
+            height: 600px;
+          }
+
           .category-ad-container {
             width: 100%;
-            min-height: 0;
+            height: auto;
             justify-content: center;
+            align-items: center;
+            overflow: hidden;
           }
 
           .just-for-you-section {
@@ -1124,7 +1187,6 @@ export default function HomeClient({
 
 function HeroSlider({ offers }: { offers: Offer[] }) {
   const [current, setCurrent] = useState(0);
-
   const offer = offers[current];
 
   useEffect(() => {
@@ -1275,7 +1337,7 @@ export function ProductCard({ product }: { product: Product }) {
   const currentMedia = media[currentIndex];
   const isVideo = currentMedia?.type === "video";
 
-  const discount = product.salePrice
+  const discount = product.salePrice && product.price > 0
     ? Math.round(
         ((product.price - product.salePrice) / product.price) * 100
       )
@@ -1645,27 +1707,36 @@ export function ProductCard({ product }: { product: Product }) {
 
 /* ===== ADSTERRA BANNER ===== */
 
-function AdsterraBanner({ code }: { code: string }) {
-  const scriptUrl = code.match(
-    /src\s*=\s*["'](https:\/\/bauval\.org\/[^"']+)["']/i
-  )?.[1];
+function AdsterraBanner({
+  code,
+  onLoaded,
+}: {
+  code: string;
+  onLoaded?: () => void;
+}) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  const key = code.match(
-    /['"]key['"]\s*:\s*['"]([a-f0-9]{32})['"]/i
-  )?.[1];
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (
+        event.source === iframeRef.current?.contentWindow &&
+        event.data === "ss-ad-loaded"
+      ) {
+        onLoaded?.();
+      }
+    };
 
-  const width = Number(
-    code.match(/['"]width['"]\s*:\s*(\d+)/i)?.[1] || 160
-  );
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, [onLoaded]);
 
-  const height = Number(
-    code.match(/['"]height['"]\s*:\s*(\d+)/i)?.[1] || 600
-  );
+  const parsed = parseAdsterraCode(code);
+  if (!parsed) return null;
 
-  if (!scriptUrl || !key || width !== 160 || height !== 600) {
-    return null;
-  }
+  const { scriptUrl, key, width, height } = parsed;
 
+  // NOTE: atOptions is assigned WITHOUT `var` so that Adsterra's script
+  // can delete it (fixes "Cannot delete property 'atOptions'" error).
   const srcDoc = `
     <!DOCTYPE html>
     <html>
@@ -1679,18 +1750,18 @@ function AdsterraBanner({ code }: { code: string }) {
           }
 
           html, body {
-            width: 160px;
-            height: 600px;
+            width: ${width}px;
+            height: ${height}px;
             overflow: hidden;
             background: transparent;
           }
         </style>
         <script>
-          var atOptions = {
+          atOptions = {
             'key': '${key}',
             'format': 'iframe',
-            'height': 600,
-            'width': 160,
+            'height': ${height},
+            'width': ${width},
             'params': {}
           };
         </script>
@@ -1699,7 +1770,30 @@ function AdsterraBanner({ code }: { code: string }) {
           src="${scriptUrl}"
         ></script>
       </head>
-      <body></body>
+      <body>
+        <script>
+          (function () {
+            var sent = false;
+            function check() {
+              if (sent || !document.body) return;
+              var el = document.body.querySelector("iframe, img, canvas, video, a");
+              if (el && (el.offsetHeight > 20 || el.offsetWidth > 20)) {
+                sent = true;
+                parent.postMessage("ss-ad-loaded", "*");
+              }
+            }
+            new MutationObserver(check).observe(document.documentElement, {
+              childList: true,
+              subtree: true
+            });
+            var n = 0;
+            var t = setInterval(function () {
+              check();
+              if (sent || ++n > 40) clearInterval(t);
+            }, 250);
+          })();
+        </script>
+      </body>
     </html>
   `;
 
@@ -1707,14 +1801,15 @@ function AdsterraBanner({ code }: { code: string }) {
     <iframe
       title="Advertisement"
       srcDoc={srcDoc}
-      width={160}
-      height={600}
-      sandbox="allow-scripts"
-      loading="lazy"
+      width={width}
+      height={height}
+      sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+      ref={iframeRef}
       referrerPolicy="no-referrer"
       style={{
-        width: "160px",
-        height: "600px",
+        width: `${width}px`,
+        height: `${height}px`,
+        maxWidth: "100%",
         border: "none",
         display: "block",
         overflow: "hidden",
