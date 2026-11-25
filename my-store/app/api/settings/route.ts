@@ -1,7 +1,7 @@
+
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAdminRequest } from "@/lib/admin-auth";
-
 
 // GET: Settings lana (Public)
 export async function GET() {
@@ -16,14 +16,19 @@ export async function GET() {
           contactPhone: "+92 300 0000000",
           address: "Karachi, Pakistan",
 
-          // Free Shipping default OFF
           freeShippingThreshold: null,
           shippingFee: 250,
           enableFreeShipping: false,
 
           logoUrl: "",
+
+          // Google AdSense
           adsenseCode: "",
           adsenseEnabled: false,
+
+          // Adsterra
+          adsterraCode: "",
+          adsterraEnabled: false,
         },
       });
     }
@@ -58,7 +63,6 @@ export async function POST(request: Request) {
 
     const body = await request.json();
 
-    // Sirf wohi fields update hongi jo request mein bheji gayi hain.
     const dataToUpdate: Record<string, any> = {};
 
     if (body.storeName !== undefined)
@@ -74,40 +78,65 @@ export async function POST(request: Request) {
       dataToUpdate.address = body.address;
 
     if (body.freeShippingThreshold !== undefined) {
-      const value = Number(body.freeShippingThreshold);
-      if (!Number.isFinite(value)) {
-        return NextResponse.json(
-          { error: "Invalid free shipping threshold" },
-          { status: 400 }
-        );
+      if (
+        body.freeShippingThreshold === null ||
+        body.freeShippingThreshold === ""
+      ) {
+        dataToUpdate.freeShippingThreshold = null;
+      } else {
+        const value = Number(body.freeShippingThreshold);
+
+        if (!Number.isFinite(value) || value < 0) {
+          return NextResponse.json(
+            { error: "Invalid free shipping threshold" },
+            { status: 400 }
+          );
+        }
+
+        dataToUpdate.freeShippingThreshold = value;
       }
-      dataToUpdate.freeShippingThreshold = value;
     }
 
     if (body.shippingFee !== undefined) {
       const value = Number(body.shippingFee);
-      if (!Number.isFinite(value)) {
+
+      if (!Number.isFinite(value) || value < 0) {
         return NextResponse.json(
           { error: "Invalid shipping fee" },
           { status: 400 }
         );
       }
+
       dataToUpdate.shippingFee = value;
     }
 
     if (body.enableFreeShipping !== undefined)
-      dataToUpdate.enableFreeShipping = Boolean(body.enableFreeShipping);
+      dataToUpdate.enableFreeShipping = Boolean(
+        body.enableFreeShipping
+      );
 
     if (body.logoUrl !== undefined)
       dataToUpdate.logoUrl = body.logoUrl;
 
-    if (body.adsenseCode !== undefined) {
+    // Google AdSense
+    if (body.adsenseCode !== undefined)
       dataToUpdate.adsenseCode =
         String(body.adsenseCode).trim() || null;
-    }
 
     if (body.adsenseEnabled !== undefined)
-      dataToUpdate.adsenseEnabled = Boolean(body.adsenseEnabled);
+      dataToUpdate.adsenseEnabled = Boolean(
+        body.adsenseEnabled
+      );
+
+    // Adsterra
+    if (body.adsterraCode !== undefined)
+      dataToUpdate.adsterraCode =
+        String(body.adsterraCode).trim() || null;
+
+    if (body.adsterraEnabled !== undefined)
+      dataToUpdate.adsterraEnabled = Boolean(
+        body.adsterraEnabled
+      );
 
     const existing = await prisma.settings.findFirst();
 

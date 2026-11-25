@@ -215,8 +215,13 @@ model Settings {
 
   logoUrl                String?
 
+  // Google AdSense
   adsenseCode            String?  @db.Text
   adsenseEnabled         Boolean  @default(false)
+
+  // Adsterra
+  adsterraCode           String?  @db.Text
+  adsterraEnabled        Boolean  @default(false)
 
   updatedAt              DateTime @updatedAt
 }

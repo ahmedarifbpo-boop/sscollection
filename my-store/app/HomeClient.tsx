@@ -80,7 +80,9 @@ export default function HomeClient({
   const [activeCategory, setActiveCategory] = useState("All");
   const [products, setProducts] = useState<Product[]>(initialProducts);
 
-  // Skeleton only appears when initial product data is empty.
+  const [adsterraEnabled, setAdsterraEnabled] = useState(false);
+  const [adsterraCode, setAdsterraCode] = useState("");
+
   const [isProductsLoading, setIsProductsLoading] = useState(
     initialProducts.length === 0
   );
@@ -124,13 +126,46 @@ export default function HomeClient({
   }, []);
 
   useEffect(() => {
+    let isMounted = true;
+
+    const fetchAdSettings = async () => {
+      try {
+        const response = await fetch("/api/settings", {
+          cache: "no-store",
+        });
+
+        if (!response.ok) return;
+
+        const data = await response.json();
+        const settings = data.settings;
+
+        if (isMounted && settings) {
+          setAdsterraEnabled(settings.adsterraEnabled === true);
+          setAdsterraCode(
+            typeof settings.adsterraCode === "string"
+              ? settings.adsterraCode
+              : ""
+          );
+        }
+      } catch (error) {
+        console.error("Adsterra settings error:", error);
+      }
+    };
+
+    fetchAdSettings();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
     justForYouRef.current?.scrollTo({
       left: 0,
       behavior: "smooth",
     });
   }, [activeCategory]);
 
-  // First 8 products are New Arrivals.
   const newArrivals = products.slice(0, 8);
   const justForYou = products.slice(8);
 
@@ -148,7 +183,6 @@ export default function HomeClient({
           (product) => product.category === activeCategory
         );
 
-  // Show maximum 9 products in the home slider.
   const sliderProducts = filteredJustForYou.slice(0, 9);
 
   const slideJustForYou = (direction: "left" | "right") => {
@@ -171,7 +205,6 @@ export default function HomeClient({
     });
   };
 
-  // Reusable skeleton cards.
   const renderSkeletonCards = (count: number, className: string) =>
     Array.from({ length: count }).map((_, index) => (
       <div className={className} key={`skeleton-${index}`}>
@@ -191,8 +224,6 @@ export default function HomeClient({
 
   return (
     <div className="home-page">
-      {/* CATEGORY NAVIGATION */}
-
       <div className="home-category-strip">
         <button
           onClick={() => setActiveCategory("All")}
@@ -219,11 +250,7 @@ export default function HomeClient({
       </div>
 
       <main className="home-container">
-        {/* HERO BANNER */}
-
         <HeroSlider offers={initialOffers} />
-
-        {/* NEW ARRIVALS */}
 
         <section className="home-section new-arrivals-section">
           <div className="home-section-heading">
@@ -259,8 +286,6 @@ export default function HomeClient({
           )}
         </section>
 
-        {/* SHOP BY CATEGORY */}
-
         <section className="home-section">
           <div className="home-section-heading centered-heading">
             <div>
@@ -272,38 +297,45 @@ export default function HomeClient({
             </div>
           </div>
 
-          <div className="home-category-grid">
-            {initialCategories.map((cat) => {
-              const Icon = cat.icon ? iconMap[cat.icon] : null;
+          <div className="category-content-layout">
+            <div className="home-category-grid">
+              {initialCategories.map((cat) => {
+                const Icon = cat.icon ? iconMap[cat.icon] : null;
 
-              return (
-                <button
-                  key={cat.id}
-                  onClick={() => setActiveCategory(cat.name)}
-                  className={`home-category-card ${
-                    activeCategory === cat.name ? "selected" : ""
-                  }`}
-                >
-                  <div className="home-category-icon">
-                    {Icon ? (
-                      <Icon size={25} strokeWidth={1.6} />
-                    ) : (
-                      <span>📦</span>
-                    )}
-                  </div>
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => setActiveCategory(cat.name)}
+                    className={`home-category-card ${
+                      activeCategory === cat.name ? "selected" : ""
+                    }`}
+                  >
+                    <div className="home-category-icon">
+                      {Icon ? (
+                        <Icon size={22} strokeWidth={1.6} />
+                      ) : (
+                        <span>📦</span>
+                      )}
+                    </div>
 
-                  <span>{cat.name}</span>
-                  <ChevronRight
-                    size={14}
-                    className="category-arrow"
-                  />
-                </button>
-              );
-            })}
+                    <span>{cat.name}</span>
+
+                    <ChevronRight
+                      size={13}
+                      className="category-arrow"
+                    />
+                  </button>
+                );
+              })}
+            </div>
+
+            {adsterraEnabled && adsterraCode.trim() && (
+              <div className="category-ad-container">
+                <AdsterraBanner code={adsterraCode} />
+              </div>
+            )}
           </div>
         </section>
-
-        {/* JUST FOR YOU SLIDER */}
 
         <section className="home-section just-for-you-section">
           <div className="just-for-you-heading">
@@ -377,8 +409,6 @@ export default function HomeClient({
         </section>
       </main>
 
-      {/* PROFESSIONAL FOOTER */}
-
       <footer className="home-footer">
         <div className="home-footer-inner">
           <div className="footer-brand">
@@ -399,12 +429,12 @@ export default function HomeClient({
 
             <Link href="/return-policy">
               <RefreshCcw size={16} />
-              Return & Refund Policy
+              Return &amp; Refund Policy
             </Link>
 
             <Link href="/terms-and-conditions">
               <FileText size={16} />
-              Terms & Conditions
+              Terms &amp; Conditions
             </Link>
           </div>
 
@@ -422,7 +452,7 @@ export default function HomeClient({
               className="footer-help-button"
             >
               <ChevronRight size={16} />
-              Help & Support
+              Help &amp; Support
             </button>
           </div>
         </div>
@@ -570,29 +600,48 @@ export default function HomeClient({
           scroll-snap-align: start;
         }
 
-        .home-category-grid {
+        /* SHOP BY CATEGORY + ADSTERRA */
+
+        .category-content-layout {
+          width: 100%;
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 160px;
+          align-items: start;
+          gap: 25px;
+        }
+
+        .category-content-layout .home-category-grid {
           width: 100%;
           max-width: 1050px;
-          margin: 0 auto;
+          margin: 0;
           display: grid;
           grid-template-columns: repeat(4, minmax(0, 1fr));
-          gap: 15px;
+          gap: 12px;
+        }
+
+        .category-ad-container {
+          width: 160px;
+          min-height: 600px;
+          display: flex;
+          justify-content: center;
+          align-items: flex-start;
+          overflow: hidden;
         }
 
         .home-category-card {
           position: relative;
-          min-height: 115px;
-          padding: 18px 14px;
+          min-height: 92px;
+          padding: 12px 10px;
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          gap: 10px;
+          gap: 7px;
           border: 1px solid var(--border);
-          border-radius: 13px;
+          border-radius: 11px;
           background: #fff;
           color: var(--text-primary);
-          font-size: 13px;
+          font-size: 12px;
           font-weight: 600;
           cursor: pointer;
           transition: transform 0.2s ease, border-color 0.2s ease,
@@ -607,8 +656,8 @@ export default function HomeClient({
         }
 
         .home-category-icon {
-          width: 49px;
-          height: 49px;
+          width: 40px;
+          height: 40px;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -619,8 +668,8 @@ export default function HomeClient({
 
         .category-arrow {
           position: absolute;
-          right: 10px;
-          top: 10px;
+          right: 8px;
+          top: 8px;
           color: #bbb;
         }
 
@@ -816,6 +865,8 @@ export default function HomeClient({
           scroll-snap-align: start;
         }
 
+        /* FOOTER */
+
         .home-footer {
           width: 100%;
           margin-top: 45px;
@@ -919,6 +970,10 @@ export default function HomeClient({
           .home-products-grid {
             grid-template-columns: repeat(4, minmax(0, 1fr));
           }
+
+          .category-content-layout {
+            gap: 16px;
+          }
         }
 
         @media (max-width: 768px) {
@@ -950,20 +1005,34 @@ export default function HomeClient({
             flex-basis: 165px;
           }
 
-          .home-category-grid {
+          .category-content-layout {
+            grid-template-columns: minmax(0, 1fr);
+            justify-items: center;
+            gap: 18px;
+          }
+
+          .category-content-layout .home-category-grid {
+            width: 100%;
             grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 9px;
+            gap: 8px;
           }
 
           .home-category-card {
-            min-height: 100px;
-            padding: 12px 5px;
-            font-size: 11px;
+            min-height: 78px;
+            padding: 9px 4px;
+            gap: 6px;
+            font-size: 10px;
           }
 
           .home-category-icon {
-            width: 42px;
-            height: 42px;
+            width: 34px;
+            height: 34px;
+          }
+
+          .category-ad-container {
+            width: 100%;
+            min-height: 0;
+            justify-content: center;
           }
 
           .just-for-you-section {
@@ -1038,7 +1107,7 @@ export default function HomeClient({
             flex-basis: 150px;
           }
 
-          .home-category-grid {
+          .category-content-layout .home-category-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
 
@@ -1182,12 +1251,11 @@ export function ProductCard({ product }: { product: Product }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
 
-  const images =
-    product.images?.filter(Boolean).length
-      ? product.images.filter(Boolean)
-      : product.image
-        ? [product.image]
-        : [];
+  const images = product.images?.filter(Boolean).length
+    ? product.images.filter(Boolean)
+    : product.image
+      ? [product.image]
+      : [];
 
   const media = [
     ...images.map((url) => ({
@@ -1572,5 +1640,86 @@ export function ProductCard({ product }: { product: Product }) {
         </button>
       </div>
     </div>
+  );
+}
+
+/* ===== ADSTERRA BANNER ===== */
+
+function AdsterraBanner({ code }: { code: string }) {
+  const scriptUrl = code.match(
+    /src\s*=\s*["'](https:\/\/bauval\.org\/[^"']+)["']/i
+  )?.[1];
+
+  const key = code.match(
+    /['"]key['"]\s*:\s*['"]([a-f0-9]{32})['"]/i
+  )?.[1];
+
+  const width = Number(
+    code.match(/['"]width['"]\s*:\s*(\d+)/i)?.[1] || 160
+  );
+
+  const height = Number(
+    code.match(/['"]height['"]\s*:\s*(\d+)/i)?.[1] || 600
+  );
+
+  if (!scriptUrl || !key || width !== 160 || height !== 600) {
+    return null;
+  }
+
+  const srcDoc = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+          }
+
+          html, body {
+            width: 160px;
+            height: 600px;
+            overflow: hidden;
+            background: transparent;
+          }
+        </style>
+        <script>
+          var atOptions = {
+            'key': '${key}',
+            'format': 'iframe',
+            'height': 600,
+            'width': 160,
+            'params': {}
+          };
+        </script>
+        <script
+          data-cfasync="false"
+          src="${scriptUrl}"
+        ></script>
+      </head>
+      <body></body>
+    </html>
+  `;
+
+  return (
+    <iframe
+      title="Advertisement"
+      srcDoc={srcDoc}
+      width={160}
+      height={600}
+      sandbox="allow-scripts"
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      style={{
+        width: "160px",
+        height: "600px",
+        border: "none",
+        display: "block",
+        overflow: "hidden",
+        background: "transparent",
+      }}
+    />
   );
 }

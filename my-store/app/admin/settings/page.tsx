@@ -38,8 +38,14 @@ export default function AdminSettingsPage() {
     shippingFee: "",
     enableFreeShipping: true,
     logoUrl: "",
+
+    // Google AdSense
     adsenseCode: "",
     adsenseEnabled: false,
+
+    // Adsterra
+    adsterraCode: "",
+    adsterraEnabled: false,
   });
 
   const [chats, setChats] = useState<any[]>([]);
@@ -95,15 +101,25 @@ export default function AdminSettingsPage() {
             contactEmail: setData.settings.contactEmail || "",
             contactPhone: setData.settings.contactPhone || "",
             address: setData.settings.address || "",
+
             freeShippingThreshold:
               setData.settings.freeShippingThreshold?.toString() || "5000",
+
             shippingFee:
               setData.settings.shippingFee?.toString() || "250",
+
             enableFreeShipping:
               setData.settings.enableFreeShipping ?? true,
+
             logoUrl: setData.settings.logoUrl || "",
+
+            // Google AdSense
             adsenseCode: setData.settings.adsenseCode || "",
             adsenseEnabled: setData.settings.adsenseEnabled ?? false,
+
+            // Adsterra
+            adsterraCode: setData.settings.adsterraCode || "",
+            adsterraEnabled: setData.settings.adsterraEnabled ?? false,
           });
         }
 
@@ -571,6 +587,7 @@ export default function AdminSettingsPage() {
           </div>
         </div>
 
+        {/* Shipping Settings */}
         <div
           style={{
             borderTop: "1px solid rgba(0,0,0,0.05)",
@@ -823,6 +840,135 @@ export default function AdminSettingsPage() {
           </div>
         </div>
 
+        {/* Adsterra Settings */}
+        <div
+          style={{
+            borderTop: "1px solid rgba(0,0,0,0.05)",
+            paddingTop: "24px",
+            marginBottom: "24px",
+          }}
+        >
+          <h3
+            style={{
+              fontSize: "16px",
+              fontWeight: "700",
+              marginBottom: "8px",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <Megaphone size={19} color="var(--accent)" />
+            Adsterra Ads Settings
+          </h3>
+
+          <p
+            style={{
+              fontSize: "13px",
+              color: "var(--text-muted)",
+              marginBottom: "16px",
+              lineHeight: "1.6",
+            }}
+          >
+            Manage your Adsterra advertisements independently from
+            Google AdSense. Paste your approved Adsterra ad code below.
+          </p>
+
+          <div
+            style={{
+              marginBottom: "16px",
+              padding: "16px",
+              background: "rgba(248, 86, 6, 0.05)",
+              borderRadius: "8px",
+              border: "1px solid rgba(248, 86, 6, 0.1)",
+            }}
+          >
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={form.adsterraEnabled}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    adsterraEnabled: e.target.checked,
+                  }))
+                }
+                style={{
+                  width: "20px",
+                  height: "20px",
+                  accentColor: "var(--accent)",
+                  cursor: "pointer",
+                }}
+              />
+
+              <span
+                style={{
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  color: "var(--text-primary)",
+                }}
+              >
+                Enable Adsterra Ads
+              </span>
+            </label>
+          </div>
+
+          <div>
+            <label
+              style={{
+                display: "block",
+                fontSize: "13px",
+                fontWeight: "600",
+                color: "var(--text-secondary)",
+                marginBottom: "6px",
+              }}
+            >
+              Adsterra Ad Code
+            </label>
+
+            <textarea
+              value={form.adsterraCode}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  adsterraCode: e.target.value,
+                }))
+              }
+              placeholder="Paste your complete Adsterra ad code here..."
+              rows={8}
+              className="admin-input"
+              style={{
+                width: "100%",
+                resize: "vertical",
+                fontFamily: "monospace",
+                fontSize: "12px",
+                lineHeight: "1.6",
+              }}
+            />
+
+            <p
+              style={{
+                fontSize: "12px",
+                color: "var(--text-muted)",
+                marginTop: "8px",
+                lineHeight: "1.6",
+              }}
+            >
+              Paste the complete ad code generated in your Adsterra
+              publisher dashboard. Only use code belonging to your
+              approved website and ad unit.
+            </p>
+          </div>
+        </div>
+
+        {/* Save Settings */}
         <button
           type="submit"
           disabled={saving}
@@ -842,6 +988,7 @@ export default function AdminSettingsPage() {
         </button>
       </form>
 
+      {/* Database Data Manager */}
       <div
         className="admin-card"
         style={{
@@ -881,6 +1028,7 @@ export default function AdminSettingsPage() {
             gap: "24px",
           }}
         >
+          {/* Customer Chats */}
           <div>
             <h3
               style={{
@@ -958,6 +1106,7 @@ export default function AdminSettingsPage() {
             )}
           </div>
 
+          {/* Products */}
           <div>
             <h3
               style={{
@@ -1038,6 +1187,7 @@ export default function AdminSettingsPage() {
             )}
           </div>
 
+          {/* Banners / Offers */}
           <div>
             <h3
               style={{
